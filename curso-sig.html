@@ -1,0 +1,207 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desafío SIG y Teledetección</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Configuración de la fuente Inter */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* Fondo que simula datos satelitales/mapa de calor - Colores Llamativos */
+            background: radial-gradient(circle at top left, #3b82f6 0%, #1d4ed8 20%, transparent 80%),
+                        radial-gradient(circle at bottom right, #f87171 0%, #ef4444 20%, transparent 80%),
+                        #1f2937; /* Fondo oscuro (espacio/océano) */
+            background-blend-mode: screen;
+            transition: background-color 0.5s ease;
+        }
+        /* Estilo para el spinner de carga */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+            display: inline-block;
+            vertical-align: text-bottom;
+            border: 0.2em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+        /* Icono de Satélite para el título */
+        .satellite-icon {
+            display: inline-block;
+            transform: rotate(-15deg);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="p-4">
+
+    <script>
+        // --- Lógica de Integración de la API de Gemini ---
+
+        // Constantes de configuración de la API
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const QUESTION_PLACEHOLDER = 'Presiona "Pregunta Siguiente" para comenzar el desafío.';
+        
+        // Elementos del DOM
+        let questionTextElement, generateButton, spinner;
+
+        /**
+         * Inicializa los elementos del DOM después de que la ventana carga.
+         */
+        window.onload = () => {
+            questionTextElement = document.getElementById('questionText');
+            generateButton = document.getElementById('generateButton');
+            spinner = document.getElementById('spinner');
+
+            if (generateButton) {
+                generateButton.addEventListener('click', generateRemoteSensingQuestion);
+            }
+            if (questionTextElement) {
+                questionTextElement.textContent = QUESTION_PLACEHOLDER;
+            }
+        };
+
+        /**
+         * Realiza la llamada a la API de Gemini con retroceso exponencial (exponential backoff).
+         * @param {string} url - URL del endpoint de la API.
+         * @param {object} payload - Cuerpo de la solicitud JSON.
+         * @param {number} maxRetries - Número máximo de reintentos.
+         * @returns {Promise<{text: string}>}
+         */
+        const makeApiCall = async (url, payload, maxRetries = 5) => {
+            const fetchWithRetry = async (attempt) => {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < maxRetries) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            return fetchWithRetry(attempt + 1);
+                        }
+                        throw new Error(`Error HTTP! Estado: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return { text: candidate.content.parts[0].text };
+                    } else {
+                        throw new Error("Estructura de respuesta inválida o contenido faltante de la API.");
+                    }
+                } catch (error) {
+                    if (attempt < maxRetries) {
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return fetchWithRetry(attempt + 1);
+                    }
+                    throw error;
+                }
+            };
+            return fetchWithRetry(1);
+        };
+
+        /**
+         * Función principal para generar una pregunta usando Gemini.
+         */
+        const generateRemoteSensingQuestion = async () => {
+            if (!questionTextElement || !generateButton || !spinner) return;
+
+            // Desactivar botón y mostrar spinner
+            generateButton.disabled = true;
+            generateButton.innerHTML = '<span class="spinner-border mr-2" role="status" aria-hidden="true"></span> Cargando...';
+            spinner.classList.remove('hidden');
+            questionTextElement.textContent = ''; 
+
+            // Instrucciones para el LLM: generar una pregunta educativa compleja.
+            const userQuery = "Genera una pregunta educativa compleja sobre Teledetección (Sensores Remotos) y Sistemas de Información Geográfica (SIG).";
+            const systemPrompt = "Eres un instructor universitario experto en geomática. Genera una pregunta técnica o conceptual avanzada sobre la intersección entre Teledetección, Sensores Remotos y Sistemas de Información Geográfica (SIG). La respuesta debe ser SÓLO la pregunta, formulada en español y concisa, sin introducciones ni la respuesta. Ejemplo: '¿Cómo afecta la corrección atmosférica a la clasificación supervisada de imágenes multiespectrales en QGIS?'";
+            
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                // No se necesita Google Search para este tipo de generación creativa/educativa
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const result = await makeApiCall(apiUrl, payload);
+                // Limpiar y mostrar el texto generado
+                questionTextElement.textContent = result.text.trim();
+                
+            } catch (error) {
+                questionTextElement.textContent = 'Error: No se pudo generar la pregunta. Inténtalo de nuevo.';
+                console.error("API Error:", error);
+            } finally {
+                // Restaurar estado del botón
+                generateButton.disabled = false;
+                generateButton.innerHTML = 'Pregunta Siguiente';
+                spinner.classList.add('hidden');
+            }
+        };
+    </script>
+
+    <!-- Contenedor Principal Centrado -->
+    <main class="w-full max-w-4xl p-6 md:p-10 lg:p-12">
+        <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-12 border-4 border-yellow-400/70 text-gray-900">
+
+            <!-- Título Principal del Curso -->
+            <h1 class="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-center text-red-600 leading-tight tracking-tighter">
+                <span class="text-yellow-600 satellite-icon">🛰️</span> Curso de SIG
+            </h1>
+            <h2 class="text-xl sm:text-2xl text-center text-gray-700 font-light mt-2 mb-8">
+                Desafía tus conocimientos en Teledetección y Sensores Remotos
+            </h2>
+
+            <!-- Contenedor de la Pregunta Generada por IA -->
+            <div id="questionContainer" class="min-h-[150px] flex items-center justify-center p-6 bg-blue-50/70 rounded-xl shadow-inner border-l-4 border-blue-500">
+                <p id="questionText" class="text-xl md:text-2xl font-semibold text-center text-blue-800">
+                    <!-- Placeholder inicial -->
+                </p>
+                <!-- Indicador de carga -->
+                <div id="spinner" class="hidden text-blue-600">
+                    <div class="spinner-border"></div>
+                </div>
+            </div>
+            
+            <!-- Botón de Acción -->
+            <div class="mt-8 text-center">
+                <button id="generateButton" class="px-10 py-4 bg-green-500 text-white text-xl font-black rounded-full shadow-2xl hover:bg-green-600 transition duration-300 transform hover:scale-[1.05] focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-70">
+                    Pregunta Siguiente
+                </button>
+            </div>
+            
+            <!-- Pie de página simple -->
+            <footer class="mt-12 pt-4 border-t border-gray-300 text-center text-sm text-gray-500">
+                © 2025 Facultad de Ciencias Agronómicas Universidad de El Salvador. Propulsado por IA.
+            </footer>
+
+        </div>
+    </main>
+
+</body>
+</html>
