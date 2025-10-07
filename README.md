@@ -3,742 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor de Código R - Análisis de Susceptibilidad</title>
+    <title>Adivina el Cuento del Tesoro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Roboto+Mono:wght@400;700&display=swap');
-        
-        /* Estilo base de la página */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0d1117; /* Fondo oscuro tipo GitHub */
-            color: #c9d1d9;
         }
-
-        /* Estilo para el texto de código */
-        .code-line {
-            font-family: 'Roboto Mono', monospace;
-            font-size: 0.875rem; /* sm */
-            white-space: pre-wrap; /* Permite saltos de línea largos */
-            line-height: 1.5;
-            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-            opacity: 0; /* Inicialmente invisible */
-            transform: translateY(10px); /* Ligeramente desplazado */
+        .font-luckiest {
+            font-family: 'Luckiest Guy', cursive;
         }
-
-        .code-line.show {
+        .treasure-chest {
+            cursor: pointer;
+            transition: transform 0.3s ease-in-out;
+        }
+        .treasure-chest:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+        .treasure-chest:active {
+            transform: scale(1.05) rotate(0deg);
+        }
+        .fragment-modal {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .hidden-modal {
+            opacity: 0;
+            transform: scale(0.9);
+            pointer-events: none;
+        }
+        .visible-modal {
             opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Contenedor principal de la consola */
-        #code-display-container {
-            max-height: 70vh; /* Limita la altura del visor */
-            overflow-y: auto;
-            scrollbar-color: #30363d #21262d; /* Color del scrollbar (Firefox) */
-            scrollbar-width: thin; /* Ancho del scrollbar (Firefox) */
-        }
-        
-        /* Estilos del scrollbar para Webkit (Chrome, Edge, Safari) */
-        #code-display-container::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        #code-display-container::-webkit-scrollbar-track {
-            background: #21262d;
-        }
-
-        #code-display-container::-webkit-scrollbar-thumb {
-            background-color: #30363d;
-            border-radius: 4px;
+            transform: scale(1);
+            pointer-events: auto;
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="bg-gradient-to-br from-cyan-300 to-blue-500 min-h-screen flex items-center justify-center p-4">
 
-    <div class="max-w-4xl mx-auto">
-        <!-- Título y Descripción -->
-        <header class="text-center mb-8 md:mb-12">
-            <h1 class="text-3xl md:text-5xl font-extrabold text-blue-400 mb-2">
-                Proyecto de Análisis Geoespacial en R
-            </h1>
-            <p class="text-gray-400 text-lg">
-                Explora el código de R para el modelado de susceptibilidad de deslizamientos.
-            </p>
-        </header>
+    <main id="game-container" class="w-full max-w-2xl text-center">
+        <!-- Título principal -->
+        <h1 class="text-5xl md:text-7xl font-luckiest text-white text-shadow-lg drop-shadow-[0_4px_4px_rgba(0,0,0,0.25)] mb-4">
+            Adivina el Cuento
+        </h1>
+        <p id="instruction" class="text-white text-xl mb-8 drop-shadow-md">
+            ¡Haz clic en el cofre para descubrir un tesoro de palabras!
+        </p>
 
-        <!-- Contenedor del Visor de Código (Estilo Consola) -->
-        <div class="bg-[#161b22] border border-[#30363d] rounded-xl shadow-2xl p-4 md:p-6 mb-6">
-            <div class="flex justify-between items-center mb-4 pb-3 border-b border-[#30363d]">
-                <span class="text-sm font-semibold text-gray-500">R_code_Abel_REPETICIONES_...R</span>
-                <!-- Botones de tráfico (estético) -->
-                <div class="flex space-x-2">
-                    <div class="w-3 h-3 bg-red-500 rounded-full" title="Cerrar"></div>
-                    <div class="w-3 h-3 bg-yellow-500 rounded-full" title="Minimizar"></div>
-                    <div class="w-3 h-3 bg-green-500 rounded-full" title="Maximizar"></div>
-                </div>
-            </div>
-            
-            <!-- Área de Visualización del Código -->
-            <div id="code-display-container" class="relative">
-                <div id="code-display" class="min-h-32">
-                    <!-- Las líneas de código se insertarán aquí -->
-                </div>
-                <div id="end-message" class="hidden text-center text-green-400 pt-4 font-bold">
-                    Fin del código. ¡Análisis completado!
-                </div>
+        <!-- Cofre del Tesoro (Botín) -->
+        <div id="treasure-chest-container" class="relative">
+            <div id="treasure-chest" class="treasure-chest text-8xl md:text-9xl inline-block">
+                <!-- Usamos un emoji como SVG para mejor control y estilo -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="drop-shadow-2xl">
+                    <path d="M20 12H4" style="fill: #a0522d; stroke: #8b4513;"></path>
+                    <path d="M18 6.5V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5" style="fill: #d2691e; stroke: #8b4513;"></path>
+                    <path d="M22 6.5H2" style="fill: #a0522d; stroke: #8b4513;"></path>
+                    <path d="M12 2v4.5" style="fill: #ffd700; stroke: #daa520;"></path>
+                    <path d="M10 16h4" style="fill: none; stroke: #8b4513;"></path>
+                    <path d="M8 6.5C8 4.5 9.5 3 12 3s4 1.5 4 3.5" style="fill: #a0522d; stroke: #8b4513;"></path>
+                </svg>
             </div>
         </div>
 
-        <!-- Área de Control: Botón y Progreso -->
-        <div class="flex flex-col space-y-4 md:space-y-0 md:space-x-4">
-            
-            <!-- Contenedor de Botones -->
-            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-                <!-- Botón de Acción -->
-                <button id="show-next-button" 
-                        class="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg 
-                            hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-[1.02]
-                            focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Mostrar Siguiente Bloque (3 líneas)
-                </button>
-                
-                <!-- Botón de Reinicio -->
-                <button id="reset-button" 
-                        class="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg shadow-lg 
-                            hover:bg-gray-700 transition duration-300 ease-in-out transform hover:scale-[1.02]
-                            focus:outline-none focus:ring-4 focus:ring-gray-500 focus:ring-opacity-50">
-                    Reiniciar Visualización
-                </button>
-            </div>
-
-            <!-- Indicador de Progreso -->
-            <div class="w-full text-left pt-4">
-                <div class="text-sm text-gray-400 mb-1">Progreso del Archivo: <span id="progress-text">0%</span></div>
-                <div class="w-full bg-[#21262d] rounded-full h-2.5">
-                    <div id="progress-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+        <!-- Modal con el fragmento del cuento -->
+        <div id="fragment-modal" class="fragment-modal hidden-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div class="bg-yellow-100 border-4 border-yellow-300 rounded-2xl p-6 md:p-8 max-w-xl w-full shadow-2xl relative text-gray-800">
+                <button id="close-modal" class="absolute top-2 right-4 text-3xl font-bold text-yellow-600 hover:text-yellow-800">&times;</button>
+                <h2 class="text-3xl font-luckiest text-yellow-700 mb-4">Fragmento Misterioso</h2>
+                <p id="story-fragment" class="text-lg md:text-xl mb-6 leading-relaxed">
+                    Aquí aparecerá un trocito de un cuento muy famoso...
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                    <input type="text" id="guess-input" placeholder="¿Qué cuento es?" class="w-full sm:w-auto flex-grow px-4 py-2 border-2 border-yellow-400 rounded-full focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <button id="submit-guess" class="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-full transition-transform transform hover:scale-105">
+                        ¡Adivinar!
+                    </button>
                 </div>
+                <p id="feedback-message" class="mt-4 text-lg font-bold h-6"></p>
             </div>
         </div>
-    </div>
+
+    </main>
 
     <script>
-        const R_CODE_RAW = `#Primer bloque
-library(sp)
-library(raster)
-
-####predictores####
-DEM<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/DEMTIF.sdat")#sirven para cargar los rasters
-LITO<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/LITO.sdat")
-USO<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/USO.sdat")
-ASP<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/ASPTIF.sdat")
-PLC<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/PLCTIF.sdat")
-PRC<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/PRCTIF.sdat")
-SLP<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/SLODEGTIF_rec.sdat")
-#SLP<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/SLODEGCLASS.sdat")
-#LCL<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/LFCTIF.sdat")
-LCL<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/Landforms_new.sdat")
-TWI<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/TWITIF.sdat")
-
-
-####area de estudio####
-#AREA<-raster("G:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTERAREA.sdat")#area di studio
-
-####DESLIZAMIENTOS####
-FRANE<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/FRANE.sdat")#raster del area de deslizamiento 
-LIP<-raster("C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/LIP.sdat")#raster de los puntos mas altos del deslizamiento (LIP)
-
-#NAvalue(AREA)<--1 #sirve per indicar a R que el raster AREA ha come "no value" el valor de -1
-
-#aqui el orden de como se cargaron es importante
-rasters<-stack(DEM,LITO,USO,ASP,PLC,PRC,SLP,LCL,TWI,FRANE,LIP) #combina los rasters
-
-data<-data.frame(rasterToPoints(rasters))#trasforma la combinazion de rasters en una tabla (dataframe), in cui ciascuna riga rappresenta una cella dei raster e le colonne i valori dei raster
-
-rownames(data) <- NULL #elimina il nome delle righe
-colnames(data) <- c("X","Y","DEM","LITO","USO","ASP","PLC","PRC","SLP","LCL","TWI","FRANE","LIP")#asigna un nombre a cada columna 
-data[data == -99999] <- NA #specifica che -99999, valore che SAGA assegna ai nodata, deve essere interpretato come novalue o no data
-
-data$FRANE[is.na(data$FRANE[])] <- 0 #assegna il valore 0 alle celle stabili
-data$LIP[is.na(data$LIP[])] <- 0 #assegna il valore 0 alle celle stabili
-
-data$FRANE<-ifelse(data$FRANE!= "0","1", "0")
-data$LIP<-ifelse(data$LIP!= "0","1", "0")
-data$FRANE<-as.numeric(data$FRANE)
-data$LIP<-as.numeric(data$LIP)
-
-#recorte del area de studio
-data=na.exclude(data) #elimina dalla tabella data le righe in cui ci sono variabili con nodata, quindi corrispondenti a tutte le celle fuori dall'area di studio
-
-summary(data)
-
-
-data$LITO<-as.factor(data$LITO)
-data$USO<-as.factor(data$USO)
-data$SLP<-as.factor(data$SLP)#indica que la variable es categorica
-data$FRANE<-as.factor(data$FRANE)
-data$LIP<-as.factor(data$LIP)
-
-
-#Pasa el Aspecto a Norte y Este
-data$N<-cos((data$ASP)*(pi/180))
-data$E<-sin((data$ASP)*(pi/180))
-
-summary(data)
-
-################################################################################
-#Segundo bloque
-FRANE<-data[which(data$FRANE=="1"),] #genera una tabla con solo los pixeles que tienen deslizamientos = 1
-LIP<-data[which(data$LIP=="1"),] #genera una tabla con solo los pixeles que tienen LIP = 1
-
-####sampling####
-library(caret)
-train.index <- createDataPartition(data$FRANE, p = .75, list = FALSE) #estrazione di un campione di righe di data pari al 75% del numero totale
-train_sample <- data[ train.index,] #creazione della tabella train_sample che include il 75% delle righe di data
-test_sample  <- data[-train.index,] #creazione della tabella test_sample che include il 25% delle righe di data
-
-library(splitstackshape)
-
-train_FRANE<-NULL
-test_FRANE<-NULL
-for (w in 1:10) {
-  train_FRANE[[w]]<-stratified(train_sample, "FRANE",
-                              nrow(train_sample[which(train_sample$FRANE=="1"),])) #estrazione del campione train, che presenta ugual numero di 0 e 1, dalla tabella train_sample
-  test_FRANE[[w]]<-stratified(test_sample, "FRANE",
-                             nrow(test_sample[which(test_sample$FRANE=="1"),])) #estrazione del campione test, che presenta ugual numero de 0 e 1, dalla tabella test_sample   
-}
-#lo stesso si applica ai LIP de innesco#
-train.index <- createDataPartition(data$LIP, p = .75, list = FALSE)
-train_sample <- data[ train.index,]
-test_sample  <- data[-train.index,]
-
-train_LIP<-NULL
-test_LIP<-NULL
-for (w in 1:10) {
-train_LIP[[w]]<-stratified(train_sample, "LIP",
-                      nrow(train_sample[which(train_sample$LIP=="1"),]))
-test_LIP[[w]]<-stratified(test_sample, "LIP",
-                     nrow(test_sample[which(test_sample$LIP=="1"),]))  
-}
-
-################################################################################
-#Tercer bloque
-#Correlacion variables FRANA
-#DEM,LITO,USO,ASP,PLC,PRC,SLP,LCL,TWI,AREA,FRANE,LIP
-library(usdm)
-str(FRANE)
-FRANE$DEM<-as.numeric(FRANE$DEM)
-FRANE$LITO<-as.numeric(FRANE$LITO)
-FRANE$USO<-as.numeric(FRANE$USO)
-FRANE$N<-as.numeric(FRANE$N)
-FRANE$E<-as.numeric(FRANE$E)
-FRANE$PLC<-as.numeric(FRANE$PLC)
-FRANE$PRC<-as.numeric(FRANE$PRC)
-FRANE$SLP<-as.numeric(FRANE$SLP)
-FRANE$TWI<-as.numeric(FRANE$TWI)
-FRANE$LCL<-as.numeric(FRANE$LCL)
-
-
-str(FRANE)
-
-x1_cor<- cor(FRANE[,c(3:5,7:11,14,15)])#para visualizar la correlacion de las variables
-v1= vifstep(x1_cor, th=10) # permite eliminar las variables con valor superior a 10 de correlación
-v1
-
-#Correlacion variables LIP
-library(usdm)
-str(LIP)
-LIP$DEM<-as.numeric(LIP$DEM)
-LIP$LITO<-as.numeric(LIP$LITO)
-LIP$USO<-as.numeric(LIP$USO)
-LIP$N<-as.numeric(LIP$N)
-LIP$E<-as.numeric(LIP$E)
-LIP$PLC<-as.numeric(LIP$PLC)
-LIP$PRC<-as.numeric(LIP$PRC)
-LIP$SLP<-as.numeric(LIP$SLP)
-LIP$TWI<-as.numeric(LIP$TWI)
-LIP$LCL<-as.numeric(LIP$LCL)
-
-
-str(LIP)
-
-x2_cor<- cor(LIP[,c(3:5,7:11,14,15)])#para visualizar la correlacion de las variables
-v2= vifstep(x2_cor, th=10) # permite eliminar las variables con valor superior a 10 de correlación
-v2
-
-
-################################################################################
-#Cuarto bloque
-####modelling####
-#4.1
-#(Gráfico de comportamiento de variables FRANE)
-library(earth)
-library(dplyr)
-library(magrittr)
-model_FRANE<-NULL
-for (w in 1:10) {
-model_FRANE[[w]]<-earth(FRANE ~ LITO + USO + PLC + PRC + SLP + LCL + N, data=train_FRANE[[w]],
-                   degree=1, trace=1,glm=list(family=binomial)) #calibrazione del modello MARS, che mette in relazione i predittori e la variabile dipendente, utilizzando il campione di allenamento
-#model_FRANE<-earth(FRANE ~ LITO + USO + PLC + PRC + SLP + LCL + N, data=train_FRANE[[w]],
-#                  degree=1, trace=1,glm=list(family=binomial)) 
-}
-evimp(model_FRANE[[w]]) #importanza dei predittori
-plotmo(model_FRANE[[w]]) #relazione predittori-probabilita
-summary(model_FRANE[[w]]) #sommario del modello  
-
-#IMPORTACIA DE VARIABLES DEL MODELO FRANE
-envimpFRANE<-NULL
-for (ñ in 1:10){
-  envimpFRANE[[ñ]]<-as.data.frame.array(evimp(model_FRANE[[ñ]]))
-}
-for (t in 1:10){
-  envimpFRANE[[t]]$row_names<-row.names(envimpFRANE[[t]])
-}
-TablenvimpFRANE<-rbind(envimpFRANE[[1]],envimpFRANE[[2]], envimpFRANE[[3]], envimpFRANE[[4]],envimpFRANE[[5]], envimpFRANE[[6]],envimpFRANE[[7]],envimpFRANE[[8]], envimpFRANE[[9]], envimpFRANE[[10]])
-
-TablenvimpFRANE <-TablenvimpFRANE %>%
-  group_by(row_names) %>% 
-  summarize(mean_rss = mean(rss, na.rm=TRUE)) 
-
-graficaFRANE <-  TablenvimpFRANE %>%
-  arrange(mean_rss) %>%
-  mutate(row_names=factor(row_names, levels=row_names)) %>%
-  ggplot(aes(x=row_names, y=mean_rss)) +
-  geom_segment( aes(xend=row_names, yend=0)) +
-  geom_point( size=2, color="orange") +
-  coord_flip() +
-  theme_bw() +
-  xlab("")+
-  ylab("Variables") +
-  ggtitle("Importancia de las varibles del modelo FRANE")
-
-print(graficaFRANE)
-
-#4.2
-#(Gráfico de comportamiento de variables LIP).#
-model_LIP<-NULL
-for (w in 1:10) {
-model_LIP[[w]]<-earth(LIP ~ LITO + USO + PLC + PRC + SLP + LCL + TWI + N, data=train_LIP[[w]],
-                 degree=1, trace=1,glm=list(family=binomial))
-#model_LIP<-earth(LIP ~ LITO + USO + PLC + PRC + SLP + LCL + TWI + N, data=train_LIP[[w]],
-#                      degree=1, trace=1,glm=list(family=binomial))
-}
-evimp(model_LIP[[w]]) #importanza dei predittori
-plotmo(model_LIP[[w]]) #relazione predittori-probabilita
-summary(model_LIP[[w]]) #sommario del modello  
-
-#IMPORTACIA DE VARIABLES DEL MODELO LIP
-envimpLIP<-NULL
-for (ñ in 1:10){
-  envimpLIP[[ñ]]<-as.data.frame.array(evimp(model_LIP[[ñ]]))
-}
-for (t in 1:10){
-  envimpLIP[[t]]$row_names<-row.names(envimpLIP[[t]])
-}
-TablenvimpLIP<-rbind(envimpLIP[[1]],envimpLIP[[2]], envimpLIP[[3]], envimpLIP[[4]],envimpLIP[[5]], envimpLIP[[6]],envimpLIP[[7]],envimpLIP[[8]], envimpLIP[[9]], envimpLIP[[10]])
-
-TablenvimpLIP <-TablenvimpLIP %>%
-  group_by(row_names) %>% 
-  summarize(mean_rss = mean(rss, na.rm=TRUE)) 
-
-graficaLIP <-  TablenvimpLIP %>%
-  arrange(mean_rss) %>%
-  mutate(row_names=factor(row_names, levels=row_names)) %>%
-  ggplot(aes(x=row_names, y=mean_rss)) +
-  geom_segment( aes(xend=row_names, yend=0)) +
-  geom_point( size=2, color="orange") +
-  coord_flip() +
-  theme_bw() +
-  xlab("")+
-  ylab("Variables") +
-  ggtitle("Importancia de las varibles del modelo LIP")
-
-print(graficaLIP)
-
-
-####score####
-score_train_FRANE<-NULL
-score_test_FRANE<-NULL
-
-for (e in 1:10) {
-  score_train_FRANE[[e]]<-predict(model_FRANE[[e]], train_FRANE[[e]], type=c("response"))
-  score_test_FRANE[[e]]<-predict(model_FRANE[[e]], test_FRANE[[e]], type=c("response"))
-}
-
-for (n in 1:10) {
-  train_FRANE[[n]]$score_train_FRANE<-score_train_FRANE[[n]]
-  test_FRANE[[n]]$score_test_FRANE<-score_test_FRANE[[n]]
-}
-
-#lo stesso si aplica ai LIP de innesco#score_test_LIP<-predict(model_LIP, test_LIP, type=c("response"))
-score_train_LIP<-NULL
-score_test_LIP<-NULL
-
-for (e in 1:10) {
-  score_train_LIP[[e]]<-predict(model_LIP[[e]], train_LIP[[e]], type=c("response"))
-  score_test_LIP[[e]]<-predict(model_LIP[[e]], test_LIP[[e]], type=c("response"))
-}
-
-for (n in 1:10) {
-  train_LIP[[n]]$score_train_LIP<-score_train_LIP[[n]]
-  test_LIP[[n]]$score_test_LIP<-score_test_LIP[[n]]
-}
-  
-################################################################################
-#Quinto bloque
-####ROC curves####
-#creazione delle curve ROC e calcolo dell'area sottesa (AUC)#
-library(pROC)
-library(ggplot2)
-library(dplyr)
-
-#roc_test_FRANE<-roc(FRANE ~ score_test_FRANE, test_FRANE)#curva ROC per i dati test
-#plot(roc_test_FRANE,legacy.axes = TRUE, col="blue")#plot della curva ROC
-
-#roc_train_FRANE<-roc(FRANE ~ score_train_FRANE, train_FRANE)
-#plot(roc_train_FRANE,legacy.axes = TRUE, add=TRUE, col="red")
-
-#FRANE
-# Corrección para calcular la curva ROC de la primera repetición
-roc_test_FRANE_1 <- roc(FRANE ~ score_test_FRANE, data = test_FRANE[[5]])
-plot(roc_test_FRANE_1, legacy.axes = TRUE, col="blue")
-
-roc_train_FRANE_1 <- roc(FRANE ~ score_train_FRANE, data = train_FRANE[[5]])
-plot(roc_train_FRANE_1, legacy.axes = TRUE, col="red")
-
-# --- 2. Generación del gráfico combinado FRANE ---
-
-# 1. Dibujar la curva de PRUEBA (la principal)
-plot(roc_test_FRANE_1,
-     legacy.axes = TRUE, # Mantiene el eje X de 0 a 1 y el Y de 0 a 1 (lo habitual en ROC)
-     col = "blue",        # Color azul para la curva de prueba
-     main = "Curvas ROC de Entrenamiento vs. Prueba (Repetición 1)", # Título del gráfico
-     xlab = "Tasa de Falsos Positivos (1 - Especificidad)",
-     ylab = "Tasa de Verdaderos Positivos (Sensibilidad)")
-
-# 2. Agregar la curva de ENTRENAMIENTO al mismo gráfico
-plot(roc_train_FRANE_1,
-     add = TRUE,          # ¡Esta es la clave para agregarla al gráfico anterior!
-     col = "red")         # Color rojo para la curva de entrenamiento
-
-# 3. Agregar una leyenda para identificar cada curva
-legend("bottomright", # Coloca la leyenda en la esquina inferior derecha
-       legend = c(
-         paste0("Prueba (AUC: ", round(auc(roc_test_FRANE_1), 3), ")"),
-         paste0("Entrenamiento (AUC: ", round(auc(roc_train_FRANE_1), 3), ")")
-       ),
-       col = c("blue", "red"),
-       lwd = 2 # Ancho de línea
-)
-
-#LIP
-# Corrección para calcular la curva ROC de la primera repetición
-roc_test_LIP_1 <- roc(LIP ~ score_test_LIP, data = test_LIP[[5]])
-plot(roc_test_LIP_1, legacy.axes = TRUE, col="blue")
-
-roc_train_LIP_1 <- roc(LIP ~ score_train_LIP, data = train_LIP[[5]])
-plot(roc_train_LIP_1, legacy.axes = TRUE, col="red")
-
-# --- 2. Generación del gráfico combinado LIP ---
-
-# 1. Dibujar la curva de PRUEBA (la principal)
-plot(roc_test_LIP_1,
-     legacy.axes = TRUE, # Mantiene el eje X de 0 a 1 y el Y de 0 a 1 (lo habitual en ROC)
-     col = "blue",        # Color azul para la curva de prueba
-     main = "Curvas ROC de Entrenamiento vs. Prueba (Repetición 1)", # Título del gráfico
-     xlab = "Tasa de Falsos Positivos (1 - Especificidad)",
-     ylab = "Tasa de Verdaderos Positivos (Sensibilidad)")
-
-# 2. Agregar la curva de ENTRENAMIENTO al mismo gráfico
-plot(roc_train_LIP_1,
-     add = TRUE,          # ¡Esta es la clave para agregarla al gráfico anterior!
-     col = "red")         # Color rojo para la curva de entrenamiento
-
-# 3. Agregar una leyenda para identificar cada curva
-legend("bottomright", # Coloca la leyenda en la esquina inferior derecha
-       legend = c(
-         paste0("Prueba (AUC: ", round(auc(roc_test_LIP_1), 3), ")"),
-         paste0("Entrenamiento (AUC: ", round(auc(roc_train_LIP_1), 3), ")")
-       ),
-       col = c("blue", "red"),
-       lwd = 2 # Ancho de línea
-)
-############################################################################
-#ROC promedio (En proceso de desaroollo)
-####################################################################################
-auc_test_FRANE<-matrix(nrow=1, ncol=10)
-auc_train_FRANE<-matrix(nrow=1, ncol=10)
-
-for(K in 1:10){
-  auc_train_FRANE[[K]]<-auc(train_FRANE[[K]]$FRANE,train_FRANE[[K]]$score_train_FRANE)
-  auc_test_FRANE[[K]]<-auc(test_FRANE[[K]]$FRANE,test_FRANE[[K]]$score_test_FRANE)
-}
-
-print(auc_train_FRANE)
-print(auc_test_FRANE)
-
-auc_tOTAL_FRANE<-rbind(auc_train_FRANE, auc_test_FRANE)
-rownames(auc_tOTAL_FRANE)<- c("auc_train_FRANE", "auc_test_FRANE")
-auc_tOTAL_FRANE<-as.data.frame.array (auc_tOTAL_FRANE)
-
-auc_tOTAL_FRANE$Mean<-rowMeans(auc_tOTAL_FRANE, na.rm = FALSE, dims = 1)
-auc_tOTAL_FRANE$SD<-apply(auc_tOTAL_FRANE,1, sd)
-
-#lo stesso si aplica ai LIP 
-auc_test_LIP<-matrix(nrow=1, ncol=10)
-auc_train_LIP<-matrix(nrow=1, ncol=10)
-
-for(K in 1:10){
-  auc_train_LIP[[K]]<-auc(train_LIP[[K]]$LIP,train_LIP[[K]]$score_train_LIP)
-  auc_test_LIP[[K]]<-auc(test_LIP[[K]]$LIP,test_LIP[[K]]$score_test_LIP)
-}
-
-auc_tOTAL_LIP<-rbind(auc_train_LIP, auc_test_LIP)
-rownames(auc_tOTAL_LIP)<- c("auc_train_LIP", "auc_test_LIP")
-auc_tOTAL_LIP<-as.data.frame.array (auc_tOTAL_LIP)
-
-auc_tOTAL_LIP$Mean<-rowMeans(auc_tOTAL_LIP, na.rm = FALSE, dims = 1)
-auc_tOTAL_LIP$SD<-apply(auc_tOTAL_LIP,1, sd)
-
-print(auc_tOTAL_FRANE)
-print(auc_tOTAL_LIP)
-
-####ROC curves####
-# creazione delle curve ROC e calcolo dell'area sottesa (AUC)
-library(pROC)
-
-# Creación de listas para almacenar los resultados
-roc_test_FRANE_list <- list()
-roc_train_FRANE_list <- list()
-auc_train_FRANE_list <- list()
-auc_test_FRANE_list <- list()
-
-# Bucle para iterar a través de cada una de las 10 repeticiones
-for (k in 1:10) {
-  # Calcule la curva ROC y el AUC para el conjunto de datos de entrenamiento (train)
-  roc_train_FRANE_list[[k]] <- roc(train_FRANE[[k]]$FRANE, train_FRANE[[k]]$score_train_FRANE)
-  auc_train_FRANE_list[[k]] <- auc(roc_train_FRANE_list[[k]])
-  
-  # Calcule la curva ROC y el AUC para el conjunto de datos de prueba (test)
-  roc_test_FRANE_list[[k]] <- roc(test_FRANE[[k]]$FRANE, test_FRANE[[k]]$score_test_FRANE)
-  auc_test_FRANE_list[[k]] <- auc(roc_test_FRANE_list[[k]])
-}
-
-# Impresión de los AUC para cada repetición
-print(auc_train_FRANE_list)
-print(auc_test_FRANE_list)
-
-# ---
-
-# Repetir el mismo proceso para el modelo LIP
-
-# Creación de listas para almacenar los resultados de LIP
-roc_test_LIP_list <- list()
-roc_train_LIP_list <- list()
-auc_train_LIP_list <- list()
-auc_test_LIP_list <- list()
-
-# Bucle para iterar a través de cada una de las 10 repeticiones
-for (k in 1:10) {
-  # Calcule la curva ROC y el AUC para el conjunto de datos de entrenamiento (train)
-  roc_train_LIP_list[[k]] <- roc(train_LIP[[k]]$LIP, train_LIP[[k]]$score_train_LIP)
-  auc_train_LIP_list[[k]] <- auc(roc_train_LIP_list[[k]])
-  
-  # Calcule la curva ROC y el AUC para el conjunto de datos de prueba (test)
-  roc_test_LIP_list[[k]] <- roc(test_LIP[[k]]$LIP, test_LIP[[k]]$score_test_LIP)
-  auc_test_LIP_list[[k]] <- auc(roc_test_LIP_list[[k]])
-}
-
-# Impresión de los AUC para cada repetición
-print(auc_train_LIP_list)
-print(auc_test_LIP_list)
-
-
-################################################################################
-#Sexto bloque
-####export map####
-#### Exportar Mapa FRANE (Promedio de 10 Modelos) ####
-#library(rgdal)
-library(sf)
-library(terra)
-# 1. Crear una matriz o dataframe para guardar las 10 predicciones
-# La columna para las predicciones debe ser del mismo largo que el dataframe 'data'
-predicciones_FRANE <- matrix(NA, nrow = nrow(data), ncol = 10)
-
-# 2. Iterar sobre los 10 modelos y predecir sobre el conjunto de datos completo 'data'
-for (w in 1:10) {
-  # Usamos el modelo de la repetición 'w' (model_FRANE[[w]])
-  predicciones_FRANE[, w] <- predict(model_FRANE[[w]], data, type = "response")
-}
-
-# 3. Calcular el score de susceptibilidad final (el promedio de las 10 predicciones)
-data$score_FRANE <- rowMeans(predicciones_FRANE)
-
-# 4. Crear y exportar el mapa raster
-score_FRANE_map <- rasterFromXYZ(data[,c("X","Y","score_FRANE")])
-
-# Asegúrate de usar la función CRS del paquete 'sp' o usar una definición más moderna si usas 'terra'
-# Aquí asumimos que mantienes el uso de 'sp' por cómo está tu código original:
-crs(score_FRANE_map) <- CRS("+init=epsg:32616") 
-
-# Exportación
-writeRaster(score_FRANE_map,
-            file="C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/score_FRANE_map_promedio",
-            format="GTiff", overwrite=TRUE, NAflag=-99999,options=c("TFW=YES"))
-
-################################################################################
-#### Exportar Mapa LIP (Promedio de 10 Modelos) ####
-# esportazione della carta di sucettibilita di LIP tramite LIP#
-
-# 1. Crear una matriz para guardar las 10 predicciones del modelo LIP
-predicciones_LIP <- matrix(NA, nrow = nrow(data), ncol = 10)
-
-# 2. Iterar sobre los 10 modelos de LIP y predecir sobre el conjunto de datos completo 'data'
-for (w in 1:10) {
-  # Usamos el modelo de la repetición 'w' (model_LIP[[w]])
-  predicciones_LIP[, w] <- predict(model_LIP[[w]], data, type = "response")
-}
-
-# 3. Calcular el score de susceptibilidad final (el promedio de las 10 predicciones)
-data$score_LIP <- rowMeans(predicciones_LIP)
-
-# 4. Crear y exportar el mapa raster LIP
-score_LIP_map <- rasterFromXYZ(data[,c("X","Y","score_LIP")])
-
-# Aquí asumimos que mantienes el uso de 'sp' por cómo está tu código original:
-crs(score_LIP_map) <- CRS("+init=epsg:32616") 
-
-# Exportación
-writeRaster(score_LIP_map,
-            file="C:/SIG_UNIPA/Doctorado/Redacción de artículos y Tesis/SIG/RASTER/score_LIP_map_promedio",
-            format="GTiff", overwrite=TRUE, NAflag=-99999,options=c("TFW=YES"))
-`;
-
-        const codeLines = R_CODE_RAW.split('\n');
-        const codeDisplay = document.getElementById('code-display');
-        const showNextButton = document.getElementById('show-next-button');
-        const resetButton = document.getElementById('reset-button'); // Nuevo botón
-        const endMessage = document.getElementById('end-message');
-        const progressBar = document.getElementById('progress-bar');
-        const progressText = document.getElementById('progress-text');
-
-        let currentIndex = 0;
-        const LINES_PER_CLICK = 3;
-        const totalLines = codeLines.length;
-
-        /**
-         * Crea un elemento div con la línea de código y el número de línea.
-         * @param {string} line - La línea de código.
-         * @param {number} index - El índice (número de línea).
-         * @returns {HTMLDivElement}
-         */
-        function createCodeLineElement(line, index) {
-            const lineContainer = document.createElement('div');
-            // Usamos flex para alinear el número de línea y el código
-            lineContainer.className = 'code-line flex text-gray-400 hover:text-white transition duration-200';
-            lineContainer.setAttribute('data-index', index);
-            
-            // Número de línea
-            const lineNumber = document.createElement('span');
-            lineNumber.className = 'w-10 text-right pr-2 select-none text-gray-600 font-bold flex-shrink-0';
-            lineNumber.textContent = (index + 1).toString().padStart(3, ' '); // Formato con padding (e.g., "  1")
-            
-            // Contenido de la línea de código
-            const lineContent = document.createElement('span');
-            // Aplicar color especial a comentarios (código R)
-            if (line.trim().startsWith('#')) {
-                 lineContent.className = 'text-green-500'; // Color verde para comentarios
-            } else if (line.trim().startsWith('library(') || line.trim().startsWith('####')) {
-                lineContent.className = 'text-blue-400 font-semibold'; // Color azul para librerías/secciones
-            } else {
-                lineContent.className = 'text-gray-200';
+        const stories = [
+            {
+                fragment: "En un país muy lejano, vivía una hermosa joven con su madrastra y dos hermanastras que la obligaban a hacer las tareas más duras de la casa, y por eso la llamaban...",
+                answer: "cenicienta"
+            },
+            {
+                fragment: "Había una vez una niña muy bonita. Su madre le había hecho una capa roja y la muchachita la la llevaba tan a menudo que todo el mundo la llamaba...",
+                answer: "caperucita roja"
+            },
+            {
+                fragment: "Érase una vez tres hermanos cerditos que vivían en el corazón del bosque. El lobo siempre andaba persiguiéndolos para comérselos y tuvieron que construir casas para protegerse.",
+                answer: "los tres cerditos"
+            },
+            {
+                fragment: "Una joven princesa es maldecida por un hada malvada: el día de su decimoquinto cumpleaños, se pinchará el dedo con el huso de una rueca y caerá en un profundo sueño...",
+                answer: "la bella durmiente"
+            },
+            {
+                fragment: "Era un muñeco de madera, pero soñaba con ser un niño de verdad. Cada vez que decía una mentira, su nariz crecía y crecía.",
+                answer: "pinocho"
+            },
+            {
+                fragment: "Tras huir de su malvada madrastra, una joven princesa encontró refugio en una casita en el bosque donde vivían siete hombrecitos que trabajaban en una mina.",
+                answer: "blanca nieves"
             }
-            lineContent.textContent = line;
+        ];
 
-            lineContainer.appendChild(lineNumber);
-            lineContainer.appendChild(lineContent);
-            return lineContainer;
+        let currentStory = null;
+
+        const treasureChest = document.getElementById('treasure-chest');
+        const modal = document.getElementById('fragment-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        const storyFragmentEl = document.getElementById('story-fragment');
+        const guessInput = document.getElementById('guess-input');
+        const submitGuessBtn = document.getElementById('submit-guess');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const instruction = document.getElementById('instruction');
+
+        function getRandomStory() {
+            const randomIndex = Math.floor(Math.random() * stories.length);
+            return stories[randomIndex];
         }
 
-        /**
-         * Muestra el siguiente bloque de líneas de código.
-         */
-        function showNextBlock() {
-            if (currentIndex >= totalLines) {
-                // Ya no hay más líneas
-                showNextButton.disabled = true;
-                endMessage.classList.remove('hidden');
-                return;
-            }
+        function openModal() {
+            currentStory = getRandomStory();
+            storyFragmentEl.textContent = currentStory.fragment;
+            guessInput.value = '';
+            feedbackMessage.textContent = '';
+            feedbackMessage.classList.remove('text-green-600', 'text-red-600');
+            modal.classList.remove('hidden-modal');
+            modal.classList.add('visible-modal');
+            instruction.textContent = "¡Lee con atención y adivina el cuento!";
+        }
 
-            const startIndex = currentIndex;
-            const endIndex = Math.min(currentIndex + LINES_PER_CLICK, totalLines);
-            let delay = 0;
+        function closeModal() {
+            modal.classList.add('hidden-modal');
+            modal.classList.remove('visible-modal');
+            instruction.textContent = "¡Haz clic en el cofre para descubrir otro tesoro!";
+        }
 
-            for (let i = startIndex; i < endIndex; i++) {
-                const lineElement = createCodeLineElement(codeLines[i], i);
-                codeDisplay.appendChild(lineElement);
-                
-                // Animar la entrada de la línea
+        function checkGuess() {
+            const userGuess = guessInput.value.trim().toLowerCase();
+            if (!userGuess) return;
+
+            if (userGuess === currentStory.answer) {
+                feedbackMessage.textContent = "¡Correcto! ¡Felicidades!";
+                feedbackMessage.classList.add('text-green-600');
+                feedbackMessage.classList.remove('text-red-600');
                 setTimeout(() => {
-                    lineElement.classList.add('show');
-                }, delay);
-                delay += 80; // Pequeño retraso para efecto de tipeo/cascada
-            }
-
-            currentIndex = endIndex;
-            updateProgress();
-
-            // Desplazar al final del contenedor
-            codeDisplay.parentElement.scrollTop = codeDisplay.parentElement.scrollHeight;
-
-            if (currentIndex >= totalLines) {
-                showNextButton.disabled = true;
-                showNextButton.textContent = '¡Archivo Leído por Completo!';
-                showNextButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'bg-red-500'); // Quitar color por si se cambia
-                showNextButton.classList.add('bg-green-600', 'hover:bg-green-700');
-                endMessage.classList.remove('hidden');
+                    closeModal();
+                }, 2000); // Cierra el modal después de 2 segundos de éxito
+            } else {
+                feedbackMessage.textContent = "¡Casi! Inténtalo de nuevo.";
+                feedbackMessage.classList.add('text-red-600');
+                feedbackMessage.classList.remove('text-green-600');
+                guessInput.focus();
             }
         }
 
-        /**
-         * Reinicia la visualización del código.
-         */
-        function resetView() {
-            currentIndex = 0;
-            codeDisplay.innerHTML = ''; // Limpia el contenido
-            endMessage.classList.add('hidden'); // Oculta el mensaje final
+        treasureChest.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        submitGuessBtn.addEventListener('click', checkGuess);
 
-            // Restablece el botón
-            showNextButton.disabled = false;
-            showNextButton.textContent = 'Mostrar Siguiente Bloque (3 líneas)';
-            showNextButton.classList.remove('bg-green-600', 'hover:bg-green-700');
-            showNextButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        // Permitir adivinar con la tecla Enter
+        guessInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                checkGuess();
+            }
+        });
+        
+        // Cerrar el modal si se hace clic fuera del contenido
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
 
-            updateProgress();
-            
-            // Muestra el primer bloque de nuevo
-            showNextBlock();
-        }
-
-        /**
-         * Actualiza la barra de progreso.
-         */
-        function updateProgress() {
-            const percentage = Math.floor((currentIndex / totalLines) * 100);
-            progressBar.style.width = `${percentage}%`;
-            progressText.textContent = `${percentage}%`;
-        }
-
-        // Event listeners
-        showNextButton.addEventListener('click', showNextBlock);
-        resetButton.addEventListener('click', resetView); // Listener para el nuevo botón
-
-        // Inicial: Mostrar el primer bloque de código al cargar
-        window.onload = () => {
-             // Inicia el proceso automáticamente para que no esté vacío
-             showNextBlock();
-        };
     </script>
 </body>
 </html>
