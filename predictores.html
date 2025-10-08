@@ -1,0 +1,162 @@
+html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictores para Evaluación de Vulnerabilidad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .map-slide {
+            display: none;
+        }
+        .map-slide.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Ejemplo de Predictores Continuos y Categóricos</h1>
+            <p class="mt-2 text-lg text-gray-600">Para la evaluación de la vulnerabilidad</p>
+        </header>
+
+        <main id="map-container" class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <!-- Los mapas se insertarán aquí dinámicamente -->
+        </main>
+
+        <div class="flex items-center justify-between mt-8 max-w-2xl mx-auto">
+            <button id="prevBtn" class="bg-gray-800 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Anterior
+            </button>
+            <div id="map-counter" class="text-center text-sm font-medium text-gray-600">
+                Mapa <span id="current-map-number">1</span> de <span id="total-maps"></span>
+            </div>
+            <button id="nextBtn" class="bg-gray-800 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 transition duration-300 ease-in-out">
+                Siguiente
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const maps = [
+            {
+                title: "Elevación",
+                type: "Continuo",
+                description: "Representa la altitud sobre el nivel del mar. Es un factor fundamental que influye en la temperatura, la precipitación y la distribución de la vegetación, afectando indirectamente la estabilidad del terreno.",
+                imageUrl: "Elev_cuenca.jpg"
+            },
+            {
+                title: "Pendientes",
+                type: "Continuo",
+                description: "Muestra la inclinación o gradiente del terreno. Las pendientes pronunciadas están directamente relacionadas con una mayor susceptibilidad a deslizamientos de tierra y una mayor velocidad de escorrentía.",
+                imageUrl: "Pendientes.jpg"
+            },
+            {
+                title: "Orientación (Aspect)",
+                type: "Categórico",
+                description: "Indica la dirección a la que se enfrenta una ladera (Norte, Sur, Este, Oeste). La orientación afecta la exposición solar, la humedad del suelo y los patrones de viento, condicionando el tipo de cobertura vegetal y el riesgo de erosión.",
+                imageUrl: "Aspect.jpg"
+            },
+            {
+                title: "Índice de Posición Topográfica (TPI)",
+                type: "Continuo",
+                description: "Compara la elevación de un punto con la de sus alrededores. Permite identificar elementos como valles (TPI < 0) y crestas (TPI > 0), que tienen diferentes respuestas hidrológicas y de estabilidad.",
+                imageUrl: "TPI.jpg"
+            },
+            {
+                title: "Índice de Humedad Topográfica (TWI)",
+                type: "Continuo",
+                description: "Modela el potencial de acumulación de agua en el terreno en función de la pendiente y el área de captación. Zonas con TWI alto son propensas a la saturación del suelo, lo que puede disparar deslizamientos.",
+                imageUrl: "TWI_modified.jpg"
+            },
+            {
+                title: "Geoformas",
+                type: "Categórico",
+                description: "Clasifica el paisaje en unidades morfológicas como planicies, laderas, valles o crestas. Cada geoforma posee características distintivas de susceptibilidad a diferentes procesos geológicos.",
+                imageUrl: "Landforms.jpg"
+            },
+            {
+                title: "Geología y Litología",
+                type: "Categórico",
+                description: "Describe los tipos de rocas y la composición del subsuelo. La resistencia, permeabilidad y grado de meteorización de los materiales geológicos son determinantes para la estabilidad de laderas.",
+                imageUrl: "GEO.jpg"
+            },
+            {
+                title: "Uso y Cobertura de Suelo",
+                type: "Categórico",
+                description: "Identifica la utilización del territorio (urbano, agrícola, forestal). La cobertura vegetal protege el suelo de la erosión, mientras que la urbanización puede alterar drásticamente la hidrología y desestabilizar el terreno.",
+                imageUrl: "USE.jpg"
+            }
+        ];
+
+        let currentMapIndex = 0;
+
+        const mapContainer = document.getElementById('map-container');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const currentMapNumberEl = document.getElementById('current-map-number');
+        const totalMapsEl = document.getElementById('total-maps');
+
+        function renderMaps() {
+            let mapHTML = '';
+            maps.forEach((map, index) => {
+                mapHTML += `
+                    <div class="map-slide p-4 md:p-6 ${index === 0 ? 'active' : ''}" data-index="${index}">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                            <div class="md:col-span-3">
+                                <img src="${map.imageUrl}" alt="Mapa de ${map.title}" class="rounded-lg shadow-md w-full h-auto object-cover">
+                            </div>
+                            <div class="md:col-span-2 flex flex-col justify-center">
+                                <h2 class="text-2xl font-bold text-gray-800">${map.title}</h2>
+                                <span class="inline-block bg-gray-200 text-gray-800 text-xs font-semibold mt-2 mb-3 mr-2 px-2.5 py-0.5 rounded-full">${map.type}</span>
+                                <p class="text-gray-600 leading-relaxed">${map.description}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            mapContainer.innerHTML = mapHTML;
+            totalMapsEl.textContent = maps.length;
+        }
+
+        function showMap(index) {
+            document.querySelectorAll('.map-slide').forEach(slide => {
+                slide.classList.remove('active');
+            });
+            document.querySelector(`.map-slide[data-index='${index}']`).classList.add('active');
+            currentMapNumberEl.textContent = index + 1;
+            
+            prevBtn.disabled = index === 0;
+            nextBtn.disabled = index === maps.length - 1;
+        }
+
+        prevBtn.addEventListener('click', () => {
+            if (currentMapIndex > 0) {
+                currentMapIndex--;
+                showMap(currentMapIndex);
+            }
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (currentMapIndex < maps.length - 1) {
+                currentMapIndex++;
+                showMap(currentMapIndex);
+            }
+        });
+
+        // Initial render
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMaps();
+            showMap(currentMapIndex);
+        });
+    </script>
+
+</body>
+</html>
