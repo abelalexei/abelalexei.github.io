@@ -66,13 +66,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- CONFIGURACIÓN ---
-            // ATENCIÓN: Un enlace estándar de Google Drive no funciona directamente.
-            // Debes crear un enlace de descarga directa. Sigue estos pasos:
-            // 1. En Google Drive, obtén el enlace para compartir tu archivo .tif ("Cualquier persona con el enlace").
-            // 2. El enlace se verá así: https://drive.google.com/file/d/ESTE_ES_EL_ID_DEL_ARCHIVO/view?usp=sharing
-            // 3. Copia el ID de ese archivo.
-            // 4. Reemplaza 'AQUI_VA_EL_ID_DE_TU_ARCHIVO' en la siguiente URL con tu ID.
-            const tiffUrl = 'https://drive.google.com/uc?export=download&id=1JytmSClNk86r3yWABp3xyVTGvoXQH7hR';
+            // La URL ahora apunta a la imagen dentro de la carpeta /images de tu repositorio de GitHub.
+            // Esto funcionará correctamente si el archivo fue subido usando Git LFS (Large File Storage).
+            const tiffUrl = 'https://abelalexei.github.io/images/ortomosaico_maestria_sig.tif';
 
             // --- ELEMENTOS DEL DOM ---
             const canvas = document.getElementById('tiff-canvas');
