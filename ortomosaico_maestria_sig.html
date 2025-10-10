@@ -1,0 +1,288 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Ortomosaico - Práctica SIG</title>
+    <!-- Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tiff.js para poder visualizar imágenes .tif en el navegador -->
+    <script src="https://unpkg.com/tiff.js@1.0.0/tiff.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilo para el cuerpo y la fuente principal */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilo para el canvas para evitar que se seleccione el texto al arrastrar */
+        canvas {
+            touch-action: none;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-cyan-400">Ortomosaico de la práctica del curso SIG</h1>
+            <p class="text-lg md:text-xl text-gray-400 mt-2">Maestría en Gestión Integral del Agua</p>
+        </header>
+
+        <main class="flex flex-col items-center">
+            <!-- Contenedor del visor de la imagen -->
+            <div id="viewer-container" class="w-full max-w-6xl bg-gray-800 rounded-lg shadow-2xl overflow-hidden border-2 border-gray-700">
+                <div id="loader" class="flex justify-center items-center h-96 text-gray-400">
+                    <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Cargando ortomosaico...</span>
+                </div>
+                <canvas id="tiff-canvas" class="hidden w-full h-auto aspect-video"></canvas>
+            </div>
+            
+            <!-- Controles -->
+            <div class="mt-6 flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <button id="reset-button" class="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-75">
+                    Restablecer Vista
+                </button>
+                <div class="text-sm text-gray-500 text-center sm:text-left">
+                    <p>Usa la rueda del ratón o el gesto de pellizcar para hacer zoom.</p>
+                    <p>Haz clic y arrastra para mover la imagen.</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="text-center text-gray-600 mt-12">
+            <p>Landing Page creada con fines demostrativos.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- CONFIGURACIÓN ---
+            // ATENCIÓN: Un enlace estándar de Google Drive no funciona directamente.
+            // Debes crear un enlace de descarga directa. Sigue estos pasos:
+            // 1. En Google Drive, obtén el enlace para compartir tu archivo .tif ("Cualquier persona con el enlace").
+            // 2. El enlace se verá así: https://drive.google.com/file/d/ESTE_ES_EL_ID_DEL_ARCHIVO/view?usp=sharing
+            // 3. Copia el ID de ese archivo.
+            // 4. Reemplaza 'AQUI_VA_EL_ID_DE_TU_ARCHIVO' en la siguiente URL con tu ID.
+            const tiffUrl = 'https://drive.google.com/uc?export=download&id=1JytmSClNk86r3yWABp3xyVTGvoXQH7hR';
+
+            // --- ELEMENTOS DEL DOM ---
+            const canvas = document.getElementById('tiff-canvas');
+            const ctx = canvas.getContext('2d');
+            const loader = document.getElementById('loader');
+            const resetButton = document.getElementById('reset-button');
+            const viewerContainer = document.getElementById('viewer-container');
+
+            // --- ESTADO DEL VISOR ---
+            let img = null; // Almacenará los datos de la imagen decodificada
+            let transform = {
+                scale: 1,
+                offsetX: 0,
+                offsetY: 0,
+            };
+            let isDragging = false;
+            let lastPos = { x: 0, y: 0 };
+            let initialPinchDistance = null;
+
+            // --- CARGA Y RENDERIZADO DE LA IMAGEN ---
+            async function loadImage() {
+                try {
+                    const response = await fetch(tiffUrl);
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP ${response.status}: No se pudo cargar la imagen.`);
+                    }
+                    const arrayBuffer = await response.arrayBuffer();
+                    const tiff = new Tiff({ buffer: arrayBuffer });
+                    
+                    // Usamos la primera página de la imagen TIFF
+                    const tiffCanvas = tiff.toCanvas();
+                    if (!tiffCanvas) {
+                        throw new Error("No se pudo decodificar la imagen TIFF.");
+                    }
+                    
+                    img = tiffCanvas; // Guardamos el canvas decodificado
+                    
+                    // Ajustar el tamaño del canvas principal a las dimensiones de la imagen
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    // Ocultar el cargador y mostrar el canvas
+                    loader.style.display = 'none';
+                    canvas.classList.remove('hidden');
+
+                    resetView(); // Ajusta la vista inicial
+                } catch (error) {
+                    console.error("Error al cargar la imagen TIF:", error);
+                    loader.innerHTML = `<span class="text-red-400">Error: No se pudo cargar la imagen. Revisa la URL y la configuración de CORS.</span><br><span class="text-xs text-gray-500">${error.message}</span>`;
+                }
+            }
+            
+            // Dibuja la imagen en el canvas con la transformación actual
+            function draw() {
+                if (!img) return;
+                
+                // Limpiar el canvas
+                ctx.save();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Aplicar transformaciones de paneo y zoom
+                ctx.translate(transform.offsetX, transform.offsetY);
+                ctx.scale(transform.scale, transform.scale);
+                
+                // Dibujar la imagen
+                ctx.drawImage(img, 0, 0);
+                
+                ctx.restore();
+            }
+
+            // Resetea la vista para que la imagen se ajuste al contenedor
+            function resetView() {
+                if (!img) return;
+                
+                // Calcular la escala para que la imagen encaje en el contenedor
+                const scaleX = viewerContainer.clientWidth / img.width;
+                const scaleY = viewerContainer.clientHeight / img.height;
+                const initialScale = Math.min(scaleX, scaleY);
+                
+                transform.scale = initialScale;
+                
+                // Centrar la imagen
+                transform.offsetX = (viewerContainer.clientWidth - img.width * initialScale) / 2;
+                transform.offsetY = (viewerContainer.clientHeight - img.height * initialScale) / 2;
+                
+                draw();
+            }
+
+            // --- MANEJADORES DE EVENTOS ---
+
+            // Zoom con la rueda del ratón
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomIntensity = 0.1;
+                const direction = e.deltaY > 0 ? -1 : 1;
+                const scaleAmount = 1 + direction * zoomIntensity;
+
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Coordenadas del puntero en el mundo de la imagen
+                const worldX = (mouseX - transform.offsetX) / transform.scale;
+                const worldY = (mouseY - transform.offsetY) / transform.scale;
+                
+                const newScale = Math.max(0.1, transform.scale * scaleAmount); // Limitar zoom mínimo
+
+                transform.offsetX = mouseX - worldX * newScale;
+                transform.offsetY = mouseY - worldY * newScale;
+                transform.scale = newScale;
+
+                draw();
+            });
+            
+            // Iniciar arrastre (ratón y táctil)
+            function startDrag(x, y) {
+                isDragging = true;
+                lastPos = { x, y };
+                canvas.style.cursor = 'grabbing';
+            }
+
+            // Mover (ratón y táctil)
+            function drag(x, y) {
+                 if (isDragging) {
+                    const dx = x - lastPos.x;
+                    const dy = y - lastPos.y;
+                    transform.offsetX += dx;
+                    transform.offsetY += dy;
+                    lastPos = { x, y };
+                    draw();
+                }
+            }
+            
+            // Finalizar arrastre (ratón y táctil)
+            function endDrag() {
+                isDragging = false;
+                canvas.style.cursor = 'grab';
+            }
+            
+            // Eventos de ratón
+            canvas.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+            canvas.addEventListener('mousemove', (e) => drag(e.clientX, e.clientY));
+            canvas.addEventListener('mouseup', endDrag);
+            canvas.addEventListener('mouseleave', endDrag);
+
+            // Eventos táctiles
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                } else if (e.touches.length === 2) {
+                    initialPinchDistance = getPinchDistance(e);
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (e.touches.length === 1) {
+                    drag(e.touches[0].clientX, e.touches[0].clientY);
+                } else if (e.touches.length === 2 && initialPinchDistance) {
+                    handlePinchZoom(e);
+                }
+            });
+            
+            canvas.addEventListener('touchend', (e) => {
+                endDrag();
+                initialPinchDistance = null;
+            });
+            
+            // Lógica para el zoom con gesto de pellizcar
+            function getPinchDistance(e) {
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                return Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2));
+            }
+
+            function handlePinchZoom(e) {
+                const currentPinchDistance = getPinchDistance(e);
+                const scaleAmount = currentPinchDistance / initialPinchDistance;
+
+                const rect = canvas.getBoundingClientRect();
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const centerX = (t1.clientX + t2.clientX) / 2 - rect.left;
+                const centerY = (t1.clientY + t2.clientY) / 2 - rect.top;
+                
+                const worldX = (centerX - transform.offsetX) / transform.scale;
+                const worldY = (centerY - transform.offsetY) / transform.scale;
+                
+                const newScale = Math.max(0.1, transform.scale * scaleAmount);
+
+                transform.offsetX = centerX - worldX * newScale;
+                transform.offsetY = centerY - worldY * newScale;
+                transform.scale = newScale;
+
+                initialPinchDistance = currentPinchDistance;
+                draw();
+            }
+
+            // Botón de reseteo
+            resetButton.addEventListener('click', resetView);
+            
+            // Recalcular la vista si cambia el tamaño de la ventana
+            window.addEventListener('resize', resetView);
+
+            // Iniciar la carga de la imagen
+            loadImage();
+        });
+    </script>
+</body>
+</html>
+
+
+
