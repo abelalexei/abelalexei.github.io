@@ -49,12 +49,30 @@
                 <canvas id="tiff-canvas" class="hidden w-full h-auto aspect-video"></canvas>
             </div>
             
-            <!-- Controles --><div class="mt-6 flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <button id="reset-button" class="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-75">
-                    Restablecer Vista
-                </button>
+            <!-- Controles -->
+            <div class="mt-6 w-full max-w-6xl flex flex-col gap-3">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button id="zoom-out" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-3 rounded-md shadow">
+                            −
+                        </button>
+                        <button id="zoom-in" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-3 rounded-md shadow">
+                            +
+                        </button>
+                        <button id="zoom-100" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-3 rounded-md shadow">
+                            100%
+                        </button>
+                        <button id="reset-button" class="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 px-3 rounded-md shadow">
+                            Ajustar
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <input id="zoom-slider" type="range" min="0.05" max="4" step="0.01" value="1" class="w-full sm:w-64">
+                        <span id="zoom-label" class="text-sm text-gray-400 w-16 text-right">100%</span>
+                    </div>
+                </div>
                 <div class="text-sm text-gray-500 text-center sm:text-left">
-                    <p>Usa la rueda del ratón o el gesto de pellizcar para hacer zoom.</p>
+                    <p>Usa los botones o la rueda del ratón/gesto de pellizcar para hacer zoom.</p>
                     <p>Haz clic y arrastra para mover la imagen.</p>
                 </div>
             </div>
@@ -68,10 +86,17 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- CONFIGURACIÓN ---
-            // Ruta absoluta a la imagen del ortomosaico en GitHub.
-            const blobUrl = 'https://github.com/abelalexei/abelalexei.github.io/blob/main/images/ortomosaico_maestria_sig_res.jpg';
-            const rawUrl = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/images/ortomosaico_maestria_sig_res.jpg';
-            const imageUrl = rawUrl;
+            // Nueva ruta proporcionada por el usuario (Imgur - URL de página), necesitamos la URL directa de la imagen
+            const imgurPageUrl = 'https://imgur.com/jyZCdWl';
+            const imgurId = 'jyZCdWl';
+            // Candidatos directos en Imgur (i.imgur.com) con distintas extensiones posibles
+            const imgurCandidates = [
+                `https://i.imgur.com/${imgurId}.jpg`,
+                `https://i.imgur.com/${imgurId}.png`,
+                `https://i.imgur.com/${imgurId}.jpeg`
+            ];
+            // Fallback: imagen RAW de GitHub usada anteriormente, por si Imgur falla
+            const githubRawUrl = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/images/ortomosaico_maestria_sig_res.jpg';
 
             // --- ELEMENTOS DEL DOM ---
             const canvas = document.getElementById('tiff-canvas');
@@ -79,6 +104,12 @@
             const loader = document.getElementById('loader');
             const resetButton = document.getElementById('reset-button');
             const viewerContainer = document.getElementById('viewer-container');
+            // Nuevos controles de zoom
+            const zoomInBtn = document.getElementById('zoom-in');
+            const zoomOutBtn = document.getElementById('zoom-out');
+            const zoom100Btn = document.getElementById('zoom-100');
+            const zoomSlider = document.getElementById('zoom-slider');
+            const zoomLabel = document.getElementById('zoom-label');
 
             // --- ESTADO DEL VISOR ---
             let img = null; // Almacenará los datos de la imagen decodificada
@@ -92,31 +123,55 @@
             let initialPinchDistance = null;
 
             // --- CARGA Y RENDERIZADO DE LA IMAGEN ---
-            function loadImage() {
+            // Prueba de carga de imagen (sin CORS HEAD), confiable bajo file://
+            function canLoadImage(url, timeout = 10000) {
+                return new Promise((resolve) => {
+                    const test = new Image();
+                    test.crossOrigin = 'Anonymous';
+                    let done = false;
+                    const t = setTimeout(() => { if (!done) { done = true; resolve(false); } }, timeout);
+                    test.onload = () => { if (!done) { done = true; clearTimeout(t); resolve(true); } };
+                    test.onerror = () => { if (!done) { done = true; clearTimeout(t); resolve(false); } };
+                    test.src = url;
+                });
+            }
+
+            async function resolveImageUrl() {
+                // 1) Intentar Imgur directo con diferentes extensiones
+                for (const u of imgurCandidates) {
+                    if (await canLoadImage(u)) return u;
+                }
+                // 2) Fallback a RAW de GitHub (anterior)
+                if (await canLoadImage(githubRawUrl)) return githubRawUrl;
+                return null;
+            }
+
+            async function loadImage() {
+                loader.innerHTML = '<span>Buscando imagen del ortomosaico...</span>';
+                const finalUrl = await resolveImageUrl();
+                if (!finalUrl) {
+                    loader.innerHTML = `<span class="text-red-400">Error: No se pudo resolver ninguna URL válida de imagen (Imgur/GitHub). Verifica la ruta.</span>`;
+                    return;
+                }
+
                 const image = new Image();
-                // Se agrega 'crossOrigin' porque la imagen se sirve desde un dominio diferente (GitHub).
-                image.crossOrigin = "Anonymous";
-                
+                image.crossOrigin = 'Anonymous';
+
                 image.onload = () => {
-                    img = image; // Guardamos el objeto de la imagen cargada
-                    
-                    // Ajustar el tamaño del canvas principal a las dimensiones de la imagen
+                    img = image;
                     canvas.width = img.width;
                     canvas.height = img.height;
-                    
-                    // Ocultar el cargador y mostrar el canvas
                     loader.style.display = 'none';
                     canvas.classList.remove('hidden');
-
-                    resetView(); // Ajusta la vista inicial
+                    resetView();
                 };
 
                 image.onerror = (error) => {
-                    console.error("Error al cargar la imagen:", error);
-                    loader.innerHTML = `<span class="text-red-400">Error: No se pudo cargar la imagen. Revisa la URL y asegúrate de que el archivo exista.</span>`;
+                    console.error('Error al cargar la imagen seleccionada:', finalUrl, error);
+                    loader.innerHTML = `<span class="text-red-400">Error: No se pudo cargar la imagen desde ${finalUrl}. Revisa la URL.</span>`;
                 };
-                
-                image.src = imageUrl;
+
+                image.src = finalUrl;
             }
             
             // Dibuja la imagen en el canvas con la transformación actual
@@ -137,14 +192,14 @@
                 ctx.restore();
             }
 
-            // Resetea la vista para que la imagen se ajuste al contenedor
+            // Resetea la vista para que la imagen CUBRA el contenedor (modo 'cover')
             function resetView() {
                 if (!img) return;
                 
-                // Calcular la escala para que la imagen encaje en el contenedor
+                // Calcular la escala para que la imagen CUBRA el contenedor
                 const scaleX = viewerContainer.clientWidth / img.width;
                 const scaleY = viewerContainer.clientHeight / img.height;
-                const initialScale = Math.min(scaleX, scaleY);
+                const initialScale = Math.max(scaleX, scaleY); // 'cover'
                 
                 transform.scale = initialScale;
                 
@@ -152,6 +207,28 @@
                 transform.offsetX = (viewerContainer.clientWidth - img.width * initialScale) / 2;
                 transform.offsetY = (viewerContainer.clientHeight - img.height * initialScale) / 2;
                 
+                updateZoomUI();
+                draw();
+            }
+
+            // Utilidad para actualizar label y slider del zoom
+            function updateZoomUI() {
+                if (!zoomSlider || !zoomLabel) return;
+                // Ajustar slider al rango si se sale
+                const clamped = Math.min(Math.max(transform.scale, parseFloat(zoomSlider.min)), parseFloat(zoomSlider.max));
+                zoomSlider.value = clamped.toFixed(2);
+                zoomLabel.textContent = `${Math.round(clamped * 100)}%`;
+            }
+
+            // Aplica zoom centrado en un punto (cx, cy) en coordenadas de pantalla
+            function applyZoom(newScale, cx, cy) {
+                newScale = Math.max(parseFloat(zoomSlider.min), Math.min(parseFloat(zoomSlider.max), newScale));
+                const worldX = (cx - transform.offsetX) / transform.scale;
+                const worldY = (cy - transform.offsetY) / transform.scale;
+                transform.offsetX = cx - worldX * newScale;
+                transform.offsetY = cy - worldY * newScale;
+                transform.scale = newScale;
+                updateZoomUI();
                 draw();
             }
 
@@ -173,12 +250,7 @@
                 const worldY = (mouseY - transform.offsetY) / transform.scale;
                 
                 const newScale = Math.max(0.1, transform.scale * scaleAmount); // Limitar zoom mínimo
-
-                transform.offsetX = mouseX - worldX * newScale;
-                transform.offsetY = mouseY - worldY * newScale;
-                transform.scale = newScale;
-
-                draw();
+                applyZoom(newScale, mouseX, mouseY);
             });
             
             // Iniciar arrastre (ratón y táctil)
@@ -267,6 +339,40 @@
 
             // Botón de reseteo
             resetButton.addEventListener('click', resetView);
+
+            // Controles de zoom
+            if (zoomInBtn) {
+                zoomInBtn.addEventListener('click', () => {
+                    const rect = canvas.getBoundingClientRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    applyZoom(transform.scale * 1.25, cx - rect.left, cy - rect.top);
+                });
+            }
+            if (zoomOutBtn) {
+                zoomOutBtn.addEventListener('click', () => {
+                    const rect = canvas.getBoundingClientRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    applyZoom(transform.scale / 1.25, cx - rect.left, cy - rect.top);
+                });
+            }
+            if (zoom100Btn) {
+                zoom100Btn.addEventListener('click', () => {
+                    const rect = canvas.getBoundingClientRect();
+                    const cx = rect.width / 2;
+                    const cy = rect.height / 2;
+                    applyZoom(1, cx, cy);
+                });
+            }
+            if (zoomSlider) {
+                zoomSlider.addEventListener('input', () => {
+                    const rect = canvas.getBoundingClientRect();
+                    const cx = rect.width / 2;
+                    const cy = rect.height / 2;
+                    applyZoom(parseFloat(zoomSlider.value), cx, cy);
+                });
+            }
             
             // Recalcular la vista si cambia el tamaño de la ventana
             window.addEventListener('resize', resetView);
@@ -277,6 +383,7 @@
     </script>
 </body>
 </html>
+
 
 
 
