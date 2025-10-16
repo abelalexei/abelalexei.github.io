@@ -1,0 +1,263 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Tesis PhD - PDF.js</title>
+    <!-- Tailwind CSS para un diseño moderno y responsivo --><script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilo para el cuerpo y la fuente principal */
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        /* Estilo para el contenedor principal del visor */
+        #viewer-container {
+            width: 100%;
+            max-width: 1024px;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        /* Estilo para el Canvas donde se renderiza el PDF */
+        #pdf-canvas {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            border: 1px solid #374151; /* gray-700 */
+            width: 100%;
+            height: auto;
+            margin-bottom: 1rem;
+        }
+        .nav-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+    <!-- Incluir PDF.js desde CDN -->
+    <!-- Hemos cambiado a la versión regular de min.js ya que la versión .mjs requiere una configuración de importación más compleja para el worker -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        <header class="mb-8 flex flex-col md:flex-row justify-center items-center text-center md:space-x-8">
+            <!-- Logo de la UES con ruta absoluta --><img src="https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/images/logo_ues.png" alt="Logo UES" class="h-24 md:h-28 mb-4 md:mb-0 flex-shrink-0">
+            
+            <!-- Títulos --><div class="max-w-2xl">
+                <h1 class="text-3xl md:text-4xl font-bold text-cyan-400">Extracto de Tesis Doctoral (PDF.js)</h1>
+                <p class="text-lg md:text-xl text-gray-400 mt-2">Geomorfología aplicada</p>
+                <p class="text-md md:text-lg text-gray-300 mt-2">Escuela de Posgrado y Educación Continua, Facultad de Ciencias Agronómicas, Universidad de El Salvador</p>
+            </div>
+
+            <!-- Logo Agronomía con ruta absoluta --><img src="https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/images/logo_agronomia.png" alt="Logo Agronomía" class="h-24 md:h-28 mt-4 md:mt-0 flex-shrink-0">
+        </header>
+
+        <main class="flex flex-col items-center">
+            <!-- Controles -->
+            <div class="mb-4 w-full max-w-6xl flex justify-between items-center bg-gray-800 p-3 rounded-lg shadow-xl border border-gray-700">
+                <button id="prev-page" class="nav-button flex items-center bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md shadow disabled:opacity-50">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    Anterior
+                </button>
+
+                <div class="text-lg font-mono text-cyan-400">
+                    Página <span id="current-page">...</span> de <span id="total-pages">...</span>
+                </div>
+                
+                <button id="next-page" class="nav-button flex items-center bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md shadow disabled:opacity-50">
+                    Siguiente
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Contenedor del visor del PDF -->
+            <div id="viewer-container" class="w-full max-w-6xl bg-gray-800 rounded-lg shadow-2xl overflow-y-auto border-2 border-gray-700 p-4">
+                <div id="loading-message" class="text-center p-12 text-gray-400 text-xl">
+                    Cargando PDF...
+                </div>
+                <canvas id="pdf-canvas" class="hidden mx-auto"></canvas>
+            </div>
+        </main>
+
+        <footer class="text-center text-gray-600 mt-12">
+            <p>Visualización impulsada por PDF.js.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Hemos cambiado a la versión normal de pdf.min.js y quitado type="module"
+        // Esto permite acceder a pdfjsLib de forma global.
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // 1. **CONFIGURACIÓN CRÍTICA DE PDF.js WORKER**
+            // Establecer la ruta del archivo worker de PDF.js (necesario para entornos CORS/CDN)
+            const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
+            if (typeof pdfjsLib !== 'undefined') {
+                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+            } else {
+                 console.error('Error: pdfjsLib no está definido. Asegúrate de que el script pdf.min.js se cargó correctamente.');
+                 return;
+            }
+
+            // La URL del PDF raw de GitHub
+            const PDF_URL = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf';
+            
+            // Referencias del DOM
+            const canvas = document.getElementById('pdf-canvas');
+            const ctx = canvas.getContext('2d');
+            const loadingMessage = document.getElementById('loading-message');
+            const currentPageSpan = document.getElementById('current-page');
+            const totalPagesSpan = document.getElementById('total-pages');
+            const prevButton = document.getElementById('prev-page');
+            const nextButton = document.getElementById('next-page');
+
+            // Estado del visor
+            let pdfDoc = null;
+            let pageNum = 1;
+            let pageRendering = false;
+            let pageNumPending = null;
+            // let scale = 1.5; // La escala ahora es dinámica/responsiva
+
+            /**
+             * Obtiene la página actual del PDF y la renderiza en el canvas.
+             * @param {number} num - Número de página a renderizar.
+             */
+            async function renderPage(num) {
+                pageRendering = true;
+                
+                try {
+                    // 1. Obtener la página del PDF
+                    const page = await pdfDoc.getPage(num);
+                    
+                    // 2. Calcular el viewport (tamaño de renderizado)
+                    // Usamos el ancho del contenedor para calcular la escala dinámica (responsiva)
+                    const containerWidth = document.getElementById('viewer-container').clientWidth - 32; // - padding
+                    const viewport = page.getViewport({ scale: 1 });
+                    const desiredScale = containerWidth / viewport.width;
+                    const finalViewport = page.getViewport({ scale: desiredScale });
+
+                    // 3. Ajustar tamaño del canvas
+                    canvas.height = finalViewport.height;
+                    canvas.width = finalViewport.width;
+                    
+                    // 4. Parámetros de renderizado
+                    const renderContext = {
+                        canvasContext: ctx,
+                        viewport: finalViewport,
+                    };
+                    
+                    // 5. Renderizar la página
+                    const renderTask = page.render(renderContext);
+                    await renderTask.promise;
+                    
+                    pageRendering = false;
+
+                    // Si hay una página pendiente (por clics rápidos), renderizarla ahora
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                    
+                    // 6. Actualizar la interfaz de usuario
+                    updatePageControls();
+
+                } catch (error) {
+                    console.error(`Error al renderizar la página ${num}:`, error);
+                    pageRendering = false;
+                }
+            }
+            
+            /**
+             * Si la página está siendo renderizada, pone en cola la siguiente página a mostrar.
+             * @param {number} num - El número de página a poner en cola.
+             */
+            function queueRenderPage(num) {
+                if (pageRendering) {
+                    pageNumPending = num;
+                } else {
+                    renderPage(num);
+                }
+            }
+
+            /**
+             * Muestra la página anterior.
+             */
+            function onPrevPage() {
+                if (pageNum <= 1) {
+                    return;
+                }
+                pageNum--;
+                queueRenderPage(pageNum);
+            }
+
+            /**
+             * Muestra la página siguiente.
+             */
+            function onNextPage() {
+                if (pageNum >= pdfDoc.numPages) {
+                    return;
+                }
+                pageNum++;
+                queueRenderPage(pageNum);
+            }
+            
+            /**
+             * Actualiza el texto del indicador de página y el estado de los botones.
+             */
+            function updatePageControls() {
+                currentPageSpan.textContent = pageNum;
+                prevButton.disabled = pageNum <= 1;
+                nextButton.disabled = pageNum >= pdfDoc.numPages;
+                canvas.classList.remove('hidden');
+                loadingMessage.classList.add('hidden');
+            }
+
+            // Asignar eventos a los botones
+            prevButton.addEventListener('click', onPrevPage);
+            nextButton.addEventListener('click', onNextPage);
+            
+            // Función para inicializar el visor PDF
+            async function initPDFViewer() {
+                try {
+                    // 1. Ocultar el canvas y mostrar el mensaje de carga
+                    canvas.classList.add('hidden');
+                    loadingMessage.classList.remove('hidden');
+                    
+                    // 2. Cargar el PDF (getDocument)
+                    // Usamos pdfjsLib.getDocument, accesible globalmente.
+                    const pdfData = await pdfjsLib.getDocument({ 
+                        url: PDF_URL,
+                        // Configuración necesaria para servidores como GitHub Raw, que no envían el archivo completo de una vez.
+                        disableRange: true, 
+                        withCredentials: false 
+                    }).promise;
+                    
+                    pdfDoc = pdfData;
+                    totalPagesSpan.textContent = pdfDoc.numPages;
+                    
+                    // 3. Renderizar la primera página
+                    renderPage(pageNum);
+
+                    // 4. Agregar manejador de resize para responsividad
+                    window.addEventListener('resize', () => {
+                        // Al redimensionar, volvemos a renderizar la página actual para ajustar el canvas
+                        queueRenderPage(pageNum); 
+                    });
+                    
+                } catch (error) {
+                    console.error('Error FATAL al cargar el PDF:', error);
+                    loadingMessage.innerHTML = `<span class="text-red-400">Error al cargar o inicializar el PDF. 
+                        Asegúrate de que la URL es un enlace directo (raw content) y que el archivo existe. 
+                        <br>Detalle: ${error.message}</span>`;
+                }
+            }
+
+            // Iniciar la carga del PDF
+            initPDFViewer();
+        });
+    </script>
+</body>
+</html>
