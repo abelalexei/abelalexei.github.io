@@ -96,9 +96,15 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             
-            // URLs del PDF (raw de GitHub y fallback local)
-            const PDF_URL_GITHUB = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf';
-            const PDF_URL_LOCAL = 'pdfs/extracto_tesis.pdf';
+            // URLs del PDF con múltiples opciones y proxies
+            // 1. jsDelivr CDN (mejor soporte para archivos grandes)
+            // 2. Raw GitHub (directo, pero con limitaciones)
+            // 3. Local fallback
+            const PDF_URLs = [
+                'https://cdn.jsdelivr.net/gh/abelalexei/abelalexei.github.io@main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf',
+                'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf',
+                'pdfs/extracto_tesis.pdf'
+            ];
             
             // Referencias del DOM
             const pdfEmbed = document.getElementById('pdf-embed');
@@ -109,19 +115,35 @@
             let usingFallback = false;
 
             // **MÉTODO 1: EMBED NATIVO (Preferido)**
+            let currentUrlIndex = 0;
+            
             function initEmbedViewer() {
-                console.log('Intentando cargar PDF con embed nativo...');
-                pdfEmbed.src = PDF_URL_GITHUB;
+                if (currentUrlIndex >= PDF_URLs.length) {
+                    console.warn('Todas las URLs de embed fallaron, usando PDF.js...');
+                    switchToFallback();
+                    return;
+                }
+                
+                const url = PDF_URLs[currentUrlIndex];
+                console.log(`Intentando cargar PDF con embed nativo desde: ${url}`);
+                loadingMessage.textContent = `Cargando PDF... (intento ${currentUrlIndex + 1}/${PDF_URLs.length})`;
+                
+                pdfEmbed.src = url;
                 pdfEmbed.classList.remove('hidden');
                 
                 // Timeout para detectar si embed falló silenciosamente
                 setTimeout(() => {
-                    // Si embed falló, cambiar a PDF.js
-                    if (!pdfEmbed.src || pdfEmbed.offsetHeight === 0) {
-                        console.warn('Embed nativo falló o no se cargó, usando fallback PDF.js...');
-                        switchToFallback();
+                    // Si embed falló (offsetHeight = 0 o sin contenido), intentar siguiente URL
+                    if (pdfEmbed.offsetHeight === 0 || !pdfEmbed.src) {
+                        console.warn(`Embed desde ${url} falló, intentando siguiente...`);
+                        currentUrlIndex++;
+                        pdfEmbed.classList.add('hidden');
+                        initEmbedViewer();
+                    } else {
+                        console.log('PDF cargado exitosamente con embed nativo');
+                        loadingMessage.classList.add('hidden');
                     }
-                }, 3000);
+                }, 4000);
             }
 
             // **MÉTODO 2: FALLBACK A PDF.js**
@@ -219,7 +241,7 @@
                 prevButton.addEventListener('click', onPrevPage);
                 nextButton.addEventListener('click', onNextPage);
                 
-                async function tryLoadPdf(url, timeoutMs = 5000) {
+                async function tryLoadPdf(url, timeoutMs = 6000) {
                     return new Promise(async (resolve) => {
                         let completed = false;
                         const timeout = setTimeout(() => {
@@ -233,7 +255,8 @@
                         try {
                             const pdfData = await pdfjsLib.getDocument({ 
                                 url: url,
-                                disableRange: true, 
+                                disableRange: false,
+                                rangeChunkSize: 65536,
                                 withCredentials: false 
                             }).promise;
                             
@@ -253,19 +276,27 @@
                     });
                 }
                 
-                // Cargar PDF: intentar GitHub primero, luego local
-                loadingMessage.textContent = 'Cargando PDF con PDF.js (GitHub → Local)...';
-                let pdfData = await tryLoadPdf(PDF_URL_GITHUB, 5000);
+                // Cargar PDF: intentar todas las URLs en orden
+                loadingMessage.textContent = 'Cargando PDF con PDF.js...';
+                let pdfData = null;
                 
-                if (!pdfData) {
-                    loadingMessage.textContent = 'Intentando carga local...';
-                    pdfData = await tryLoadPdf(PDF_URL_LOCAL, 5000);
+                for (let i = 0; i < PDF_URLs.length && !pdfData; i++) {
+                    loadingMessage.textContent = `Cargando PDF... (intento ${i + 1}/${PDF_URLs.length})`;
+                    pdfData = await tryLoadPdf(PDF_URLs[i], 6000);
                 }
                 
                 if (!pdfData) {
                     loadingMessage.innerHTML = `<span class="text-red-400">
-                        Error: No se pudo cargar el PDF.<br>
-                        Intenta colocarlo en: <code>C:\\SIG_MCGIA\\pdfs\\extracto_tesis.pdf</code>
+                        <strong>Error: No se pudo cargar el PDF desde ninguna fuente.</strong><br>
+                        <br>
+                        <strong>Soluciones:</strong><br>
+                        1. Si tienes el PDF localmente, colócalo en:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<code>C:\\SIG_MCGIA\\pdfs\\extracto_tesis.pdf</code><br>
+                        <br>
+                        2. Verifica tu conexión a Internet (se necesita para jsDelivr o GitHub)<br>
+                        <br>
+                        3. Intenta descargar el PDF manualmente desde:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<a href="https://cdn.jsdelivr.net/gh/abelalexei/abelalexei.github.io@main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf" target="_blank" class="text-blue-400 underline">jsDelivr CDN</a>
                     </span>`;
                     return;
                 }
