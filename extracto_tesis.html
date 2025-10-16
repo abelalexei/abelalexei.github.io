@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor de Tesis PhD - PDF.js</title>
+    <title>Visor de Tesis PhD - PDF Embed</title>
     <!-- Tailwind CSS para un diseño moderno y responsivo --><script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,22 +22,23 @@
             flex-direction: column;
             align-items: center;
         }
-        /* Estilo para el Canvas donde se renderiza el PDF */
-        #pdf-canvas {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            border: 1px solid #374151; /* gray-700 */
+        /* Estilo para el embed PDF */
+        embed {
             width: 100%;
-            height: auto;
-            margin-bottom: 1rem;
+            height: 80vh;
+            border: 1px solid #374151; /* gray-700 */
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .nav-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+        #fallback-container {
+            display: none;
+            width: 100%;
+        }
     </style>
-    <!-- Incluir PDF.js desde CDN -->
-    <!-- Hemos cambiado a la versión regular de min.js ya que la versión .mjs requiere una configuración de importación más compleja para el worker -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-200 antialiased">
 
@@ -55,8 +56,8 @@
         </header>
 
         <main class="flex flex-col items-center">
-            <!-- Controles -->
-            <div class="mb-4 w-full max-w-6xl flex justify-between items-center bg-gray-800 p-3 rounded-lg shadow-xl border border-gray-700">
+            <!-- Controles (solo para fallback PDF.js) -->
+            <div id="controls-container" class="hidden mb-4 w-full max-w-6xl flex justify-between items-center bg-gray-800 p-3 rounded-lg shadow-xl border border-gray-700">
                 <button id="prev-page" class="nav-button flex items-center bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md shadow disabled:opacity-50">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                     Anterior
@@ -74,10 +75,16 @@
             
             <!-- Contenedor del visor del PDF -->
             <div id="viewer-container" class="w-full max-w-6xl bg-gray-800 rounded-lg shadow-2xl overflow-y-auto border-2 border-gray-700 p-4">
-                <div id="loading-message" class="text-center p-12 text-gray-400 text-xl">
-                    Cargando PDF...
+                <!-- Método 1: Embed nativo (preferido) -->
+                <embed id="pdf-embed" type="application/pdf" class="hidden" />
+                
+                <!-- Método 2: Fallback a PDF.js (canvas) -->
+                <div id="fallback-container" class="w-full">
+                    <div id="loading-message" class="text-center p-12 text-gray-400 text-xl">
+                        Cargando PDF...
+                    </div>
+                    <canvas id="pdf-canvas" class="hidden mx-auto"></canvas>
                 </div>
-                <canvas id="pdf-canvas" class="hidden mx-auto"></canvas>
             </div>
         </main>
 
@@ -87,235 +94,196 @@
     </div>
 
     <script>
-        // Hemos cambiado a la versión normal de pdf.min.js y quitado type="module"
-        // Esto permite acceder a pdfjsLib de forma global.
-
         document.addEventListener('DOMContentLoaded', () => {
             
-            // 1. **CONFIGURACIÓN CRÍTICA DE PDF.js WORKER**
-            // Establecer la ruta del archivo worker de PDF.js (necesario para entornos CORS/CDN)
-            const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
-            if (typeof pdfjsLib !== 'undefined') {
-                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-            } else {
-                 console.error('Error: pdfjsLib no está definido. Asegúrate de que el script pdf.min.js se cargó correctamente.');
-                 return;
-            }
-
-            // La URL del PDF raw de GitHub (con fallback a local si está disponible)
-            // Convertida de blob a raw para descarga directa
+            // URLs del PDF (raw de GitHub y fallback local)
             const PDF_URL_GITHUB = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf';
-            const PDF_URL_LOCAL = 'pdfs/extracto_tesis.pdf'; // Fallback a local
-            let PDF_URL = PDF_URL_GITHUB; // Empezar con GitHub
+            const PDF_URL_LOCAL = 'pdfs/extracto_tesis.pdf';
             
             // Referencias del DOM
+            const pdfEmbed = document.getElementById('pdf-embed');
+            const fallbackContainer = document.getElementById('fallback-container');
+            const controlsContainer = document.getElementById('controls-container');
             const canvas = document.getElementById('pdf-canvas');
-            const ctx = canvas.getContext('2d');
             const loadingMessage = document.getElementById('loading-message');
-            const currentPageSpan = document.getElementById('current-page');
-            const totalPagesSpan = document.getElementById('total-pages');
-            const prevButton = document.getElementById('prev-page');
-            const nextButton = document.getElementById('next-page');
+            let usingFallback = false;
 
-            // Estado del visor
-            let pdfDoc = null;
-            let pageNum = 1;
-            let pageRendering = false;
-            let pageNumPending = null;
-            // let scale = 1.5; // La escala ahora es dinámica/responsiva
-
-            /**
-             * Obtiene la página actual del PDF y la renderiza en el canvas.
-             * @param {number} num - Número de página a renderizar.
-             */
-            async function renderPage(num) {
-                pageRendering = true;
+            // **MÉTODO 1: EMBED NATIVO (Preferido)**
+            function initEmbedViewer() {
+                console.log('Intentando cargar PDF con embed nativo...');
+                pdfEmbed.src = PDF_URL_GITHUB;
+                pdfEmbed.classList.remove('hidden');
                 
-                try {
-                    // 1. Obtener la página del PDF
-                    const page = await pdfDoc.getPage(num);
-                    
-                    // 2. Calcular el viewport (tamaño de renderizado)
-                    // Usamos el ancho del contenedor para calcular la escala dinámica (responsiva)
-                    const containerWidth = document.getElementById('viewer-container').clientWidth - 32; // - padding
-                    const viewport = page.getViewport({ scale: 1 });
-                    const desiredScale = containerWidth / viewport.width;
-                    const finalViewport = page.getViewport({ scale: desiredScale });
-
-                    // 3. Ajustar tamaño del canvas
-                    canvas.height = finalViewport.height;
-                    canvas.width = finalViewport.width;
-                    
-                    // 4. Parámetros de renderizado
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: finalViewport,
-                    };
-                    
-                    // 5. Renderizar la página
-                    const renderTask = page.render(renderContext);
-                    await renderTask.promise;
-                    
-                    pageRendering = false;
-
-                    // Si hay una página pendiente (por clics rápidos), renderizarla ahora
-                    if (pageNumPending !== null) {
-                        renderPage(pageNumPending);
-                        pageNumPending = null;
+                // Timeout para detectar si embed falló silenciosamente
+                setTimeout(() => {
+                    // Si embed falló, cambiar a PDF.js
+                    if (!pdfEmbed.src || pdfEmbed.offsetHeight === 0) {
+                        console.warn('Embed nativo falló o no se cargó, usando fallback PDF.js...');
+                        switchToFallback();
                     }
-                    
-                    // 6. Actualizar la interfaz de usuario
-                    updatePageControls();
-
-                } catch (error) {
-                    console.error(`Error al renderizar la página ${num}:`, error);
-                    pageRendering = false;
-                }
+                }, 3000);
             }
-            
-            /**
-             * Si la página está siendo renderizada, pone en cola la siguiente página a mostrar.
-             * @param {number} num - El número de página a poner en cola.
-             */
-            function queueRenderPage(num) {
-                if (pageRendering) {
-                    pageNumPending = num;
+
+            // **MÉTODO 2: FALLBACK A PDF.js**
+            async function switchToFallback() {
+                usingFallback = true;
+                pdfEmbed.classList.add('hidden');
+                fallbackContainer.style.display = 'block';
+                controlsContainer.classList.remove('hidden');
+                
+                // Configurar PDF.js worker
+                const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
+                if (typeof pdfjsLib !== 'undefined') {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                 } else {
-                    renderPage(num);
-                }
-            }
-
-            /**
-             * Muestra la página anterior.
-             */
-            function onPrevPage() {
-                if (pageNum <= 1) {
+                    console.error('PDF.js no disponible');
+                    loadingMessage.innerHTML = '<span class="text-red-400">Error: PDF.js no disponible y embed falló.</span>';
                     return;
                 }
-                pageNum--;
-                queueRenderPage(pageNum);
-            }
+                
+                // Referencias para PDF.js fallback
+                const ctx = canvas.getContext('2d');
+                const currentPageSpan = document.getElementById('current-page');
+                const totalPagesSpan = document.getElementById('total-pages');
+                const prevButton = document.getElementById('prev-page');
+                const nextButton = document.getElementById('next-page');
 
-            /**
-             * Muestra la página siguiente.
-             */
-            function onNextPage() {
-                if (pageNum >= pdfDoc.numPages) {
-                    return;
-                }
-                pageNum++;
-                queueRenderPage(pageNum);
-            }
-            
-            /**
-             * Actualiza el texto del indicador de página y el estado de los botones.
-             */
-            function updatePageControls() {
-                currentPageSpan.textContent = pageNum;
-                prevButton.disabled = pageNum <= 1;
-                nextButton.disabled = pageNum >= pdfDoc.numPages;
-                canvas.classList.remove('hidden');
-                loadingMessage.classList.add('hidden');
-            }
+                let pdfDoc = null;
+                let pageNum = 1;
+                let pageRendering = false;
+                let pageNumPending = null;
 
-            // Asignar eventos a los botones
-            prevButton.addEventListener('click', onPrevPage);
-            nextButton.addEventListener('click', onNextPage);
-            
-            // Función para intentar cargar el PDF desde una URL con timeout
-            async function tryLoadPdf(url, timeoutMs = 8000) {
-                return new Promise(async (resolve) => {
-                    let completed = false;
-                    
-                    // Timeout: si no carga en 8 segundos, cancelar
-                    const timeout = setTimeout(() => {
-                        if (!completed) {
-                            completed = true;
-                            console.warn(`Timeout al cargar PDF desde ${url}`);
-                            resolve(null);
-                        }
-                    }, timeoutMs);
-                    
+                async function renderPage(num) {
+                    pageRendering = true;
                     try {
-                        const pdfData = await pdfjsLib.getDocument({ 
-                            url: url,
-                            disableRange: true, 
-                            withCredentials: false 
-                        }).promise;
+                        const page = await pdfDoc.getPage(num);
+                        const containerWidth = document.getElementById('viewer-container').clientWidth - 32;
+                        const viewport = page.getViewport({ scale: 1 });
+                        const desiredScale = containerWidth / viewport.width;
+                        const finalViewport = page.getViewport({ scale: desiredScale });
+
+                        canvas.height = finalViewport.height;
+                        canvas.width = finalViewport.width;
                         
-                        if (!completed) {
-                            completed = true;
-                            clearTimeout(timeout);
-                            resolve(pdfData);
+                        const renderContext = {
+                            canvasContext: ctx,
+                            viewport: finalViewport,
+                        };
+                        
+                        const renderTask = page.render(renderContext);
+                        await renderTask.promise;
+                        
+                        pageRendering = false;
+
+                        if (pageNumPending !== null) {
+                            renderPage(pageNumPending);
+                            pageNumPending = null;
                         }
+                        
+                        updatePageControls();
+
                     } catch (error) {
-                        if (!completed) {
-                            completed = true;
-                            clearTimeout(timeout);
-                            console.warn(`Error al cargar PDF desde ${url}:`, error.message);
-                            resolve(null);
-                        }
+                        console.error(`Error al renderizar página ${num}:`, error);
+                        pageRendering = false;
                     }
+                }
+                
+                function queueRenderPage(num) {
+                    if (pageRendering) {
+                        pageNumPending = num;
+                    } else {
+                        renderPage(num);
+                    }
+                }
+
+                function onPrevPage() {
+                    if (pageNum <= 1) return;
+                    pageNum--;
+                    queueRenderPage(pageNum);
+                }
+
+                function onNextPage() {
+                    if (pageNum >= pdfDoc.numPages) return;
+                    pageNum++;
+                    queueRenderPage(pageNum);
+                }
+                
+                function updatePageControls() {
+                    currentPageSpan.textContent = pageNum;
+                    prevButton.disabled = pageNum <= 1;
+                    nextButton.disabled = pageNum >= pdfDoc.numPages;
+                    canvas.classList.remove('hidden');
+                    loadingMessage.classList.add('hidden');
+                }
+
+                prevButton.addEventListener('click', onPrevPage);
+                nextButton.addEventListener('click', onNextPage);
+                
+                async function tryLoadPdf(url, timeoutMs = 5000) {
+                    return new Promise(async (resolve) => {
+                        let completed = false;
+                        const timeout = setTimeout(() => {
+                            if (!completed) {
+                                completed = true;
+                                console.warn(`Timeout al cargar PDF desde ${url}`);
+                                resolve(null);
+                            }
+                        }, timeoutMs);
+                        
+                        try {
+                            const pdfData = await pdfjsLib.getDocument({ 
+                                url: url,
+                                disableRange: true, 
+                                withCredentials: false 
+                            }).promise;
+                            
+                            if (!completed) {
+                                completed = true;
+                                clearTimeout(timeout);
+                                resolve(pdfData);
+                            }
+                        } catch (error) {
+                            if (!completed) {
+                                completed = true;
+                                clearTimeout(timeout);
+                                console.warn(`Error al cargar PDF desde ${url}:`, error.message);
+                                resolve(null);
+                            }
+                        }
+                    });
+                }
+                
+                // Cargar PDF: intentar GitHub primero, luego local
+                loadingMessage.textContent = 'Cargando PDF con PDF.js (GitHub → Local)...';
+                let pdfData = await tryLoadPdf(PDF_URL_GITHUB, 5000);
+                
+                if (!pdfData) {
+                    loadingMessage.textContent = 'Intentando carga local...';
+                    pdfData = await tryLoadPdf(PDF_URL_LOCAL, 5000);
+                }
+                
+                if (!pdfData) {
+                    loadingMessage.innerHTML = `<span class="text-red-400">
+                        Error: No se pudo cargar el PDF.<br>
+                        Intenta colocarlo en: <code>C:\\SIG_MCGIA\\pdfs\\extracto_tesis.pdf</code>
+                    </span>`;
+                    return;
+                }
+                
+                pdfDoc = pdfData;
+                totalPagesSpan.textContent = pdfDoc.numPages;
+                renderPage(pageNum);
+
+                window.addEventListener('resize', () => {
+                    queueRenderPage(pageNum); 
                 });
             }
-            
-            // Función para inicializar el visor PDF
-            async function initPDFViewer() {
-                try {
-                    // 1. Ocultar el canvas y mostrar el mensaje de carga
-                    canvas.classList.add('hidden');
-                    loadingMessage.classList.remove('hidden');
-                    loadingMessage.textContent = 'Cargando PDF...';
-                    
-                    // 2. Intentar cargar el PDF desde GitHub primero (con timeout de 5 segundos)
-                    console.log('Intentando cargar desde GitHub...');
-                    loadingMessage.textContent = 'Cargando desde GitHub (timeout: 5s)...';
-                    let pdfData = await tryLoadPdf(PDF_URL_GITHUB, 5000);
-                    
-                    if (!pdfData) {
-                        // 3. Si GitHub falla o timeout, intentar local
-                        console.log('GitHub no disponible, intentando carga local...');
-                        loadingMessage.textContent = 'GitHub no disponible, intentando carga local...';
-                        pdfData = await tryLoadPdf(PDF_URL_LOCAL, 8000);
-                    }
-                    
-                    // 4. Si ambas fallan, mostrar error
-                    if (!pdfData) {
-                        throw new Error('No se pudo cargar el PDF desde ninguna fuente (ni GitHub ni local). Verifica que el PDF exista en pdfs/extracto_tesis.pdf o que tengas conexión a Internet para GitHub.');
-                    }
-                    
-                    pdfDoc = pdfData;
-                    totalPagesSpan.textContent = pdfDoc.numPages;
-                    console.log(`PDF cargado exitosamente. Total de páginas: ${pdfDoc.numPages}`);
-                    
-                    // 5. Renderizar la primera página
-                    renderPage(pageNum);
 
-                    // 6. Agregar manejador de resize para responsividad
-                    window.addEventListener('resize', () => {
-                        queueRenderPage(pageNum); 
-                    });
-                    
-                } catch (error) {
-                    console.error('Error FATAL al cargar el PDF:', error);
-                    loadingMessage.innerHTML = `<span class="text-red-400">
-                        <strong>Error al cargar el PDF.</strong><br>
-                        <br>
-                        <strong>Soluciones:</strong><br>
-                        1. Si tienes el PDF localmente, colócalo en:<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;<code>C:\\SIG_MCGIA\\pdfs\\extracto_tesis.pdf</code><br>
-                        <br>
-                        2. O descarga el PDF desde GitHub:<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;<a href="https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf" target="_blank" class="text-blue-400 underline">Descargar desde GitHub</a><br>
-                        <br>
-                        <strong>Detalle del error:</strong> ${error.message}
-                    </span>`;
-                }
-            }
-
-            // Iniciar la carga del PDF
-            initPDFViewer();
+            // Iniciar con embed nativo (preferido)
+            initEmbedViewer();
         });
     </script>
+    <!-- Incluir PDF.js desde CDN como fallback -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
 </body>
 </html>
