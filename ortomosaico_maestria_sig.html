@@ -79,7 +79,7 @@
         </main>
 
         <footer class="text-center text-gray-600 mt-12">
-            <p>Landing Page para mostrar contenido generado con dron Phantom 4 Pro.</p>
+            <p>Landing Page creada con fines demostrativos.</p>
         </footer>
     </div>
 
@@ -163,7 +163,7 @@
                     canvas.height = img.height;
                     loader.style.display = 'none';
                     canvas.classList.remove('hidden');
-                    resetView();
+                    initialView(); // Vista inicial al 80% centrada
                 };
 
                 image.onerror = (error) => {
@@ -206,6 +206,21 @@
                 // Centrar la imagen
                 transform.offsetX = (viewerContainer.clientWidth - img.width * initialScale) / 2;
                 transform.offsetY = (viewerContainer.clientHeight - img.height * initialScale) / 2;
+                
+                updateZoomUI();
+                draw();
+            }
+
+            // Vista inicial: 80% del tamaño 1:1, centrada
+            function initialView() {
+                if (!img) return;
+                
+                const targetScale = 0.8; // 80% del tamaño original (1:1)
+                transform.scale = targetScale;
+                
+                // Centrar la imagen en el visor
+                transform.offsetX = (viewerContainer.clientWidth - img.width * targetScale) / 2;
+                transform.offsetY = (viewerContainer.clientHeight - img.height * targetScale) / 2;
                 
                 updateZoomUI();
                 draw();
@@ -383,6 +398,7 @@
     </script>
 </body>
 </html>
+
 
 
 
