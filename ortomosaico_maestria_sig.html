@@ -192,20 +192,22 @@
                 ctx.restore();
             }
 
-            // Resetea la vista para que la imagen CUBRA el contenedor (modo 'cover')
+            // Resetea la vista: zoom al 80% y centrada
             function resetView() {
                 if (!img) return;
                 
-                // Calcular la escala para que la imagen CUBRA el contenedor
-                const scaleX = viewerContainer.clientWidth / img.width;
-                const scaleY = viewerContainer.clientHeight / img.height;
-                const initialScale = Math.max(scaleX, scaleY); // 'cover'
+                const targetScale = 0.8; // 80% del tamaño original (1:1)
+                transform.scale = targetScale;
                 
-                transform.scale = initialScale;
+                // Centrar la imagen en el visor
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const viewWidth = viewerContainer.clientWidth;
+                const viewHeight = viewerContainer.clientHeight;
                 
-                // Centrar la imagen
-                transform.offsetX = (viewerContainer.clientWidth - img.width * initialScale) / 2;
-                transform.offsetY = (viewerContainer.clientHeight - img.height * initialScale) / 2;
+                // Calcular offsets para centrar la imagen escalada en el visor
+                transform.offsetX = (viewWidth - canvasWidth * targetScale) / 2;
+                transform.offsetY = (viewHeight - canvasHeight * targetScale) / 2;
                 
                 updateZoomUI();
                 draw();
@@ -404,3 +406,4 @@
     </script>
 </body>
 </html>
+
