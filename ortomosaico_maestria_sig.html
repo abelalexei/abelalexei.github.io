@@ -218,9 +218,15 @@
                 const targetScale = 0.8; // 80% del tamaño original (1:1)
                 transform.scale = targetScale;
                 
-                // Centrar la imagen en el visor
-                transform.offsetX = (viewerContainer.clientWidth - img.width * targetScale) / 2;
-                transform.offsetY = (viewerContainer.clientHeight - img.height * targetScale) / 2;
+                // Centrar la imagen en el visor (usando dimensiones del canvas)
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const viewWidth = viewerContainer.clientWidth;
+                const viewHeight = viewerContainer.clientHeight;
+                
+                // Calcular offsets para centrar la imagen escalada en el visor
+                transform.offsetX = (viewWidth - canvasWidth * targetScale) / 2;
+                transform.offsetY = (viewHeight - canvasHeight * targetScale) / 2;
                 
                 updateZoomUI();
                 draw();
@@ -398,12 +404,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
