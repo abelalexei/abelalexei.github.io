@@ -102,8 +102,11 @@
                  return;
             }
 
-            // La URL del PDF raw de GitHub
-            const PDF_URL = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf';
+            // La URL del PDF raw de GitHub (con fallback a local si está disponible)
+            // Convertida de blob a raw para descarga directa
+            const PDF_URL_GITHUB = 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf';
+            const PDF_URL_LOCAL = 'pdfs/extracto_tesis.pdf'; // Fallback a local
+            let PDF_URL = PDF_URL_GITHUB; // Empezar con GitHub
             
             // Referencias del DOM
             const canvas = document.getElementById('pdf-canvas');
@@ -219,39 +222,94 @@
             prevButton.addEventListener('click', onPrevPage);
             nextButton.addEventListener('click', onNextPage);
             
+            // Función para intentar cargar el PDF desde una URL con timeout
+            async function tryLoadPdf(url, timeoutMs = 8000) {
+                return new Promise(async (resolve) => {
+                    let completed = false;
+                    
+                    // Timeout: si no carga en 8 segundos, cancelar
+                    const timeout = setTimeout(() => {
+                        if (!completed) {
+                            completed = true;
+                            console.warn(`Timeout al cargar PDF desde ${url}`);
+                            resolve(null);
+                        }
+                    }, timeoutMs);
+                    
+                    try {
+                        const pdfData = await pdfjsLib.getDocument({ 
+                            url: url,
+                            disableRange: true, 
+                            withCredentials: false 
+                        }).promise;
+                        
+                        if (!completed) {
+                            completed = true;
+                            clearTimeout(timeout);
+                            resolve(pdfData);
+                        }
+                    } catch (error) {
+                        if (!completed) {
+                            completed = true;
+                            clearTimeout(timeout);
+                            console.warn(`Error al cargar PDF desde ${url}:`, error.message);
+                            resolve(null);
+                        }
+                    }
+                });
+            }
+            
             // Función para inicializar el visor PDF
             async function initPDFViewer() {
                 try {
                     // 1. Ocultar el canvas y mostrar el mensaje de carga
                     canvas.classList.add('hidden');
                     loadingMessage.classList.remove('hidden');
+                    loadingMessage.textContent = 'Cargando PDF...';
                     
-                    // 2. Cargar el PDF (getDocument)
-                    // Usamos pdfjsLib.getDocument, accesible globalmente.
-                    const pdfData = await pdfjsLib.getDocument({ 
-                        url: PDF_URL,
-                        // Configuración necesaria para servidores como GitHub Raw, que no envían el archivo completo de una vez.
-                        disableRange: true, 
-                        withCredentials: false 
-                    }).promise;
+                    // 2. Intentar cargar el PDF desde GitHub primero (con timeout de 5 segundos)
+                    console.log('Intentando cargar desde GitHub...');
+                    loadingMessage.textContent = 'Cargando desde GitHub (timeout: 5s)...';
+                    let pdfData = await tryLoadPdf(PDF_URL_GITHUB, 5000);
+                    
+                    if (!pdfData) {
+                        // 3. Si GitHub falla o timeout, intentar local
+                        console.log('GitHub no disponible, intentando carga local...');
+                        loadingMessage.textContent = 'GitHub no disponible, intentando carga local...';
+                        pdfData = await tryLoadPdf(PDF_URL_LOCAL, 8000);
+                    }
+                    
+                    // 4. Si ambas fallan, mostrar error
+                    if (!pdfData) {
+                        throw new Error('No se pudo cargar el PDF desde ninguna fuente (ni GitHub ni local). Verifica que el PDF exista en pdfs/extracto_tesis.pdf o que tengas conexión a Internet para GitHub.');
+                    }
                     
                     pdfDoc = pdfData;
                     totalPagesSpan.textContent = pdfDoc.numPages;
+                    console.log(`PDF cargado exitosamente. Total de páginas: ${pdfDoc.numPages}`);
                     
-                    // 3. Renderizar la primera página
+                    // 5. Renderizar la primera página
                     renderPage(pageNum);
 
-                    // 4. Agregar manejador de resize para responsividad
+                    // 6. Agregar manejador de resize para responsividad
                     window.addEventListener('resize', () => {
-                        // Al redimensionar, volvemos a renderizar la página actual para ajustar el canvas
                         queueRenderPage(pageNum); 
                     });
                     
                 } catch (error) {
                     console.error('Error FATAL al cargar el PDF:', error);
-                    loadingMessage.innerHTML = `<span class="text-red-400">Error al cargar o inicializar el PDF. 
-                        Asegúrate de que la URL es un enlace directo (raw content) y que el archivo existe. 
-                        <br>Detalle: ${error.message}</span>`;
+                    loadingMessage.innerHTML = `<span class="text-red-400">
+                        <strong>Error al cargar el PDF.</strong><br>
+                        <br>
+                        <strong>Soluciones:</strong><br>
+                        1. Si tienes el PDF localmente, colócalo en:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<code>C:\\SIG_MCGIA\\pdfs\\extracto_tesis.pdf</code><br>
+                        <br>
+                        2. O descarga el PDF desde GitHub:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<a href="https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf" target="_blank" class="text-blue-400 underline">Descargar desde GitHub</a><br>
+                        <br>
+                        <strong>Detalle del error:</strong> ${error.message}
+                    </span>`;
                 }
             }
 
