@@ -97,10 +97,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             
             // URLs del PDF con múltiples opciones y proxies
-            // 1. jsDelivr CDN (mejor soporte para archivos grandes)
-            // 2. Raw GitHub (directo, pero con limitaciones)
-            // 3. Local fallback
+            // 1. Vercel Blob Storage (PRIMARY - más confiable y rápido)
+            // 2. jsDelivr CDN (fallback)
+            // 3. Raw GitHub (fallback)
+            // 4. Local fallback
             const PDF_URLs = [
+                'https://0pirqdibwhkntkvf.public.blob.vercel-storage.com/Extract_pdf_tesis.pdf',
                 'https://cdn.jsdelivr.net/gh/abelalexei/abelalexei.github.io@main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf',
                 'https://raw.githubusercontent.com/abelalexei/abelalexei.github.io/main/Extracto%20de%20tesis%20PhD%20Abel%20Argueta.pdf',
                 'pdfs/extracto_tesis.pdf'
